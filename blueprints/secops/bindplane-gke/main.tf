@@ -32,9 +32,9 @@ module "project" {
     ? var.project_create.parent
     : null
   )
-  prefix         = var.prefix
-  project_create = var.project_create != null
-  name           = var.project_id
+  prefix        = var.prefix
+  project_reuse = var.project_create != null ? null : {}
+  name          = var.project_id
   services = concat([
     "compute.googleapis.com",
     "iap.googleapis.com",
@@ -215,6 +215,7 @@ resource "helm_release" "bindplane" {
     gcp_project_id      = module.project.project_id
     hostname            = "${var.dns_config.hostname}.${var.dns_config.domain}"
     address             = "ingress"
+    tag                 = var.bindplane_config.image_tag
   })]
 
   depends_on = [

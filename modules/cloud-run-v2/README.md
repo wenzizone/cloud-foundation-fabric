@@ -170,7 +170,8 @@ module "cloud_run" {
   }
   deletion_protection = false
 }
-# tftest modules=1 resources=1 inventory=service-direct-vpc.yaml e2e
+# E2E test disabled due to b/332419038
+# tftest modules=1 resources=1 inventory=service-direct-vpc.yaml
 ```
 
 ## VPC Access Connector
@@ -276,7 +277,7 @@ module "kms" {
   project_id = module.project.project_id
   keyring = {
     location = var.region
-    name     = "keyring"
+    name     = "${var.prefix}-keyring"
   }
   keys = {
     "key-regional" = {
@@ -568,14 +569,15 @@ module "cloud_run" {
 | name | description | sensitive |
 |---|---|:---:|
 | [id](outputs.tf#L17) | Fully qualified job or service id. |  |
-| [job](outputs.tf#L22) | Cloud Run Job. |  |
-| [service](outputs.tf#L27) | Cloud Run Service. |  |
-| [service_account](outputs.tf#L32) | Service account resource. |  |
-| [service_account_email](outputs.tf#L37) | Service account email. |  |
-| [service_account_iam_email](outputs.tf#L42) | Service account email. |  |
-| [service_name](outputs.tf#L50) | Cloud Run service name. |  |
-| [service_uri](outputs.tf#L55) | Main URI in which the service is serving traffic. |  |
-| [vpc_connector](outputs.tf#L60) | VPC connector resource if created. |  |
+| [invoke_command](outputs.tf#L22) | Command to invoke Cloud Run Service / submit job. |  |
+| [job](outputs.tf#L36) | Cloud Run Job. |  |
+| [service](outputs.tf#L41) | Cloud Run Service. |  |
+| [service_account](outputs.tf#L46) | Service account resource. |  |
+| [service_account_email](outputs.tf#L51) | Service account email. |  |
+| [service_account_iam_email](outputs.tf#L56) | Service account email. |  |
+| [service_name](outputs.tf#L64) | Cloud Run service name. |  |
+| [service_uri](outputs.tf#L69) | Main URI in which the service is serving traffic. |  |
+| [vpc_connector](outputs.tf#L74) | VPC connector resource if created. |  |
 
 ## Fixtures
 

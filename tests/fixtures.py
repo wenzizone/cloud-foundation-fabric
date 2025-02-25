@@ -64,7 +64,7 @@ def _prepare_root_module(path):
 
 
 def plan_summary(module_path, basedir, tf_var_files=None, extra_files=None,
-                 **tf_vars):
+                 extra_dirs=None, **tf_vars):
   """
   Run a Terraform plan on the module located at `module_path`.
 
@@ -105,7 +105,12 @@ def plan_summary(module_path, basedir, tf_var_files=None, extra_files=None,
     extra_files = [(module_path / filename).resolve()
                    for x in extra_files or []
                    for filename in glob.glob(x, root_dir=module_path)]
+    extra_dirs = [
+        (module_path / dirname).resolve() for dirname in extra_dirs or []
+    ]
     tf.setup(extra_files=extra_files, upgrade=True)
+    for extra_dir in extra_dirs:
+      os.symlink(extra_dir, tf.tfdir / extra_dir.name)
     tf_var_files = [(basedir / x).resolve() for x in tf_var_files or []]
     plan = tf.plan(output=True, tf_var_file=tf_var_files, tf_vars=tf_vars)
 
@@ -148,20 +153,21 @@ def plan_summary_fixture(request):
   """
 
   def inner(module_path, basedir=None, tf_var_files=None, extra_files=None,
-            **tf_vars):
+            extra_dirs=None, **tf_vars):
     if basedir is None:
       basedir = Path(request.fspath).parent
     return plan_summary(module_path=module_path, basedir=basedir,
                         tf_var_files=tf_var_files, extra_files=extra_files,
-                        **tf_vars)
+                        extra_dirs=extra_dirs, **tf_vars)
 
   return inner
 
 
 def plan_validator(module_path, inventory_paths, basedir, tf_var_files=None,
-                   extra_files=None, **tf_vars):
+                   extra_files=None, extra_dirs=None, **tf_vars):
   summary = plan_summary(module_path=module_path, tf_var_files=tf_var_files,
-                         extra_files=extra_files, basedir=basedir, **tf_vars)
+                         extra_files=extra_files, extra_dirs=extra_dirs,
+                         basedir=basedir, **tf_vars)
 
   # allow single single string for inventory_paths
   if not isinstance(inventory_paths, list):
@@ -186,7 +192,7 @@ def plan_validator(module_path, inventory_paths, basedir, tf_var_files=None,
     #   side of any comparison operators.
     # - include a descriptive error message to the assert
     # print(yaml.dump({'values': summary.values}))
-    # print(yaml.dump({'counts': summary.counts}))
+    # print("", yaml.dump({'counts': summary.counts}))
 
     if 'values' in inventory:
       try:
@@ -249,10 +255,14 @@ def validate_plan_object(expected_value, plan_value, relative_path,
   # dictionaries / objects
   if isinstance(expected_value, dict) and isinstance(plan_value, dict):
     for k, v in expected_value.items():
-      assert k in plan_value, \
-        f'{relative_path}: {relative_address}.{k} is not a valid address in the plan'
-      validate_plan_object(v, plan_value[k], relative_path,
-                           f'{relative_address}.{k}')
+      if v == "__missing__":
+        assert k not in plan_value, \
+          f'{relative_path}: {relative_address}.{k} was expected to be missing, but exists with value: {plan_value[k]}'
+      else:
+        assert k in plan_value, \
+          f'{relative_path}: {relative_address}.{k} is not a valid address in the plan'
+        validate_plan_object(v, plan_value[k], relative_path,
+                             f'{relative_address}.{k}')
 
   # lists
   elif isinstance(expected_value, list) and isinstance(plan_value, list):

@@ -207,11 +207,16 @@ def plan_validator(module_path, inventory_paths, basedir, tf_var_files=None,
       try:
         expected_counts = inventory['counts']
         for type_, expected_count in expected_counts.items():
-          assert type_ in summary.counts, \
-              f'{relative_path}: module does not create any resources of type `{type_}`'
-          plan_count = summary.counts[type_]
-          assert plan_count == expected_count, \
-              f'{relative_path}: count of {type_} resources failed. Got {plan_count}, expected {expected_count}'
+          # modules and resources always exists in summary
+          if expected_count == 0 and type_ not in ('modules', 'resources'):
+            assert type_ not in summary.counts, \
+              f'{relative_path}: module creates resources of type `{type_}` when expected not to create any'
+          else:
+            assert type_ in summary.counts, \
+                f'{relative_path}: module does not create any resources of type `{type_}`'
+            plan_count = summary.counts[type_]
+            assert plan_count == expected_count, \
+                f'{relative_path}: count of {type_} resources failed. Got {plan_count}, expected {expected_count}'
       except AssertionError:
         print(f'\n{path}')
         print(yaml.dump({'counts': summary.counts}))
@@ -391,7 +396,24 @@ def e2e_validator_fixture(request):
   return inner
 
 
-@pytest.fixture(scope='session', name='e2e_tfvars_path')
+@pytest.fixture(scope='session', name='e2e_tfvars_path_session')
+def e2e_tfvars_path_session():
+  """Session scoped fixture preparing end-to-end environment
+
+  Creates a GCP project for each thread. Tests reuse the same GCP project.
+  """
+  yield from e2e_tfvars_path()
+
+
+@pytest.fixture(scope='function', name='e2e_tfvars_path_function')
+def e2e_tfvars_path_function():
+  """Function scoped fixture preparing end-to-end environment
+
+  Creates a separate GCP project for each of E2E test run.
+  """
+  yield from e2e_tfvars_path()
+
+
 def e2e_tfvars_path():
   """Fixture preparing end-to-end test environment
 

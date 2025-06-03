@@ -39,9 +39,10 @@ output "projects" {
   description = "Created projects."
   value = {
     for k, v in module.projects.projects : k => {
-      id         = v.project_id
-      number     = v.number
-      automation = v.automation
+      id             = v.project_id
+      number         = v.number
+      automation     = v.automation
+      service_agents = v.service_agents
     }
   }
 }
@@ -56,12 +57,19 @@ output "service_accounts" {
   }
 }
 
+resource "google_storage_bucket_object" "version" {
+  count  = fileexists("fast_version.txt") ? 1 : 0
+  bucket = var.automation.outputs_bucket
+  name   = "versions/2-project-factory-version.txt"
+  source = "fast_version.txt"
+}
+
 # generate tfvars file for subsequent stages
 
 resource "local_file" "providers" {
-  for_each        = { for v in local.project_provider_data : v.key => v }
+  for_each        = var.outputs_location == null ? {} : { for v in local.project_provider_data : v.key => v }
   file_permission = "0644"
-  filename        = "${try(pathexpand(var.outputs_location), "")}/providers/${var.stage_name}/${each.key}-providers.tf"
+  filename        = "${pathexpand(var.outputs_location)}/providers/${var.stage_name}/${each.key}-providers.tf"
   content         = templatefile("templates/providers.tf.tpl", each.value)
 }
 

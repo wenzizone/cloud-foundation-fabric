@@ -27,6 +27,7 @@ locals {
     "artifactregistry.googleapis.com",
     "assuredworkloads.googleapis.com",
     "bigquery.googleapis.com",
+    "certificatemanager.googleapis.com",
     "cloudbuild.googleapis.com",
     "cloudfunctions.googleapis.com",
     "cloudkms.googleapis.com",
@@ -44,13 +45,15 @@ locals {
     "looker.googleapis.com",
     "monitoring.googleapis.com",
     "networkconnectivity.googleapis.com",
+    "networksecurity.googleapis.com",
+    "networkservices.googleapis.com",
+    "privateca.googleapis.com",
     "pubsub.googleapis.com",
     "run.googleapis.com",
     "secretmanager.googleapis.com",
     "servicenetworking.googleapis.com",
     "serviceusage.googleapis.com",
     "sqladmin.googleapis.com",
-    "stackdriver.googleapis.com",
     "storage-component.googleapis.com",
     "storage.googleapis.com",
     "vpcaccess.googleapis.com",
@@ -226,6 +229,16 @@ resource "google_project_service_identity" "jit_si" {
   provider   = google-beta
   project    = google_project.project.project_id
   service    = each.key
+  depends_on = [google_project_service.project_service]
+}
+
+data "google_storage_project_service_account" "gcs_sa" {
+  project    = google_project.project.project_id
+  depends_on = [google_project_service.project_service]
+}
+
+data "google_bigquery_default_service_account" "bq_sa" {
+  project    = google_project.project.project_id
   depends_on = [google_project_service.project_service]
 }
 

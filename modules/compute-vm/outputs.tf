@@ -57,7 +57,7 @@ output "internal_ips" {
 
 output "login_command" {
   description = "Command to SSH into the machine."
-  value       = "gcloud compute ssh --project ${var.project_id} --zone ${var.zone} ${var.name}"
+  value       = "gcloud compute ssh --project ${local.project_id} --zone ${local.zone} ${var.name}"
 }
 
 output "self_link" {
@@ -86,10 +86,18 @@ output "service_account_iam_email" {
 
 output "template" {
   description = "Template resource."
-  value       = try(google_compute_instance_template.default[0], null)
+  value = (
+    local.template_regional
+    ? try(google_compute_region_instance_template.default[0], null)
+    : try(google_compute_instance_template.default[0], null)
+  )
 }
 
 output "template_name" {
   description = "Template name."
-  value       = try(google_compute_instance_template.default[0].name, null)
+  value = (
+    local.template_regional
+    ? try(google_compute_region_instance_template.default[0].name, null)
+    : try(google_compute_instance_template.default[0].name, null)
+  )
 }

@@ -60,11 +60,12 @@ resource "google_container_cluster" "cluster" {
   # the default node pool is deleted here, use the gke-nodepool module instead.
   # shielded nodes are controlled by the cluster-level enable_features variable
   node_config {
-    boot_disk_kms_key = var.node_config.boot_disk_kms_key
-    service_account   = var.node_config.service_account
-    tags              = var.node_config.tags
-    labels            = var.node_config.k8s_labels
-    resource_labels   = var.node_config.labels
+    boot_disk_kms_key     = var.node_config.boot_disk_kms_key
+    service_account       = var.node_config.service_account
+    tags                  = var.node_config.tags
+    labels                = var.node_config.k8s_labels
+    resource_labels       = var.node_config.labels
+    resource_manager_tags = var.node_config.resource_manager_tags
     dynamic "shielded_instance_config" {
       for_each = var.enable_features.shielded_nodes ? [""] : []
       content {
@@ -85,6 +86,21 @@ resource "google_container_cluster" "cluster" {
       insecure_kubelet_readonly_port_enabled = upper(var.node_config.kubelet_readonly_port_enabled)
       gcfs_config {
         enabled = var.enable_features.image_streaming
+      }
+    }
+  }
+  dynamic "node_pool_auto_config" {
+    for_each = try(local.cas.enabled, null) == true ? [""] : []
+    content {
+      network_tags {
+        tags = var.node_pool_auto_config.network_tags
+      }
+      resource_manager_tags = var.node_pool_auto_config.resource_manager_tags
+      node_kubelet_config {
+        insecure_kubelet_readonly_port_enabled = upper(var.node_pool_auto_config.kubelet_readonly_port_enabled)
+      }
+      linux_node_config {
+        cgroup_mode = var.node_pool_auto_config.cgroup_mode
       }
     }
   }
@@ -280,6 +296,12 @@ resource "google_container_cluster" "cluster" {
     for_each = var.enable_features.beta_apis != null ? [""] : []
     content {
       enabled_apis = var.enable_features.beta_apis
+    }
+  }
+  dynamic "fleet" {
+    for_each = var.fleet_project != null ? [""] : []
+    content {
+      project = var.fleet_project
     }
   }
   dynamic "gateway_api_config" {
@@ -479,7 +501,13 @@ resource "google_container_cluster" "cluster" {
     for_each = var.enable_features.upgrade_notifications != null ? [""] : []
     content {
       pubsub {
-        enabled = true
+        enabled = var.enable_features.upgrade_notifications.enabled
+        dynamic "filter" {
+          for_each = var.enable_features.upgrade_notifications.event_types != null ? [""] : []
+          content {
+            event_type = var.enable_features.upgrade_notifications.event_types
+          }
+        }
         topic = (
           try(var.enable_features.upgrade_notifications.topic_id, null) != null
           ? var.enable_features.upgrade_notifications.topic_id
@@ -499,6 +527,7 @@ resource "google_container_cluster" "cluster" {
         ? true
         : try(var.access_config.ip_access.disable_public_endpoint, null)
       )
+      master_ipv4_cidr_block = try(var.access_config.master_ipv4_cidr_block, null)
       private_endpoint_subnetwork = try(
         var.access_config.ip_access.private_endpoint_config.endpoint_subnetwork,
         null
@@ -607,6 +636,7 @@ resource "google_gke_backup_backup_plan" "backup_plan" {
   backup_config {
     include_volume_data = each.value.include_volume_data
     include_secrets     = each.value.include_secrets
+    permissive_mode     = each.value.permissive_mode
     dynamic "encryption_key" {
       for_each = each.value.encryption_key != null ? [""] : []
       content {

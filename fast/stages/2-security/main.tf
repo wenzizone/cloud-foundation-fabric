@@ -1,5 +1,5 @@
 /**
- * Copyright 2024 Google LLC
+ * Copyright 2025 Google LLC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,72 +15,52 @@
  */
 
 locals {
-  has_env_folders = var.folder_ids.security-dev != null
-  iam_delegated = join(",", formatlist("'%s'", [
-    "roles/cloudkms.cryptoKeyEncrypterDecrypter"
-  ]))
-  iam_admin_delegated = try(
-    var.stage_configs["security"].iam_admin_delegated, {}
-  )
-  iam_viewer = try(
-    var.stage_configs["security"].iam_viewer, {}
-  )
-  project_services = [
-    "certificatemanager.googleapis.com",
-    "cloudkms.googleapis.com",
-    # "networkmanagement.googleapis.com",
-    # "networksecurity.googleapis.com",
-    "privateca.googleapis.com",
-    "secretmanager.googleapis.com",
-    "stackdriver.googleapis.com"
-  ]
-}
-
-module "folder" {
-  source        = "../../../modules/folder"
-  folder_create = false
-  id            = var.folder_ids.security
-  contacts = (
-    var.essential_contacts == null
-    ? {}
-    : { (var.essential_contacts) = ["ALL"] }
-  )
-}
-
-module "project" {
-  source   = "../../../modules/project"
-  for_each = var.environments
-  name     = "${each.value.short_name}-sec-core-0"
-  parent = coalesce(
-    var.folder_ids["security-${each.key}"], var.folder_ids.security
-  )
-  prefix          = var.prefix
-  billing_account = var.billing_account.id
-  labels          = { environment = each.key }
-  services        = local.project_services
-  tag_bindings = local.has_env_folders ? {} : {
-    environment = var.tag_values["environment/${each.value.tag_name}"]
+  paths = {
+    for k, v in var.factories_config : k => try(pathexpand(v), null)
   }
-  # optionally delegate a fixed set of IAM roles to selected principals
-  iam = {
-    "roles/iam.securityReviewer" = try(
-      local.iam_viewer[each.key], []
+  _ctx = {
+    for k, v in var.context : k => merge(v, try(local._defaults.context[k], {}))
+  }
+  # fail if we have no valid defaults
+  _defaults = yamldecode(file(local.paths.defaults))
+  ctx = merge(local._ctx, {
+    folder_ids = merge(
+      var.folder_ids, local._ctx.folder_ids
     )
+    iam_principals = merge(
+      var.iam_principals,
+      {
+        for k, v in var.service_accounts :
+        "service_accounts/${k}" => "serviceAccount:${v}"
+      },
+      local._ctx.iam_principals
+    )
+    locations   = local._ctx.locations
+    perimeters  = merge(var.perimeters, local._ctx.vpc_sc_perimeters)
+    project_ids = merge(var.project_ids, local._ctx.project_ids)
+    tag_keys    = merge(var.tag_keys, local._ctx.tag_keys)
+    tag_values  = merge(var.tag_values, local._ctx.tag_values)
+  })
+  defaults = {
+    folder_name = try(local._defaults.global.folder_id, "security")
+    stage_name  = try(local._defaults.global.stage_name, "2-security")
   }
-  iam_bindings = (
-    lookup(local.iam_admin_delegated, each.key, null) == null ? {} : {
-      sa_delegated_grants = {
-        role    = "roles/cloudkms.admin"
-        members = try(local.iam_admin_delegated[each.key], [])
-        condition = {
-          title       = "${each.key}_stage3_sa_delegated_grants"
-          description = "${var.environments[each.key].name} KMS delegated grants."
-          expression = format(
-            "api.getAttribute('iam.googleapis.com/modifiedGrantsByRole', []).hasOnly([%s])",
-            local.iam_delegated
-          )
-        }
-      }
-    }
-  )
+  output_files = {
+    local_path     = try(local._defaults.output_files.local_path, null)
+    storage_bucket = try(local._defaults.output_files.storage_bucket, null)
+    providers      = try(local._defaults.output_files.providers, {})
+  }
+  project_defaults = {
+    defaults = merge(
+      {
+        billing_account = var.billing_account.id
+        prefix          = var.prefix
+      },
+      lookup(var.folder_ids, local.defaults.folder_name, null) == null ? {} : {
+        parent = lookup(var.folder_ids, local.defaults.folder_name, null)
+      },
+      try(local._defaults.projects.defaults, {})
+    )
+    overrides = try(local._defaults.projects.overrides, {})
+  }
 }

@@ -45,7 +45,7 @@ The stage is designed to allow defining additional perimeters via the `perimeter
 
 Restricted services, access levels, ingress and egress policies can all be configured via YAML-based files, which allow intuitive editing and minimize the complexity of running operations.
 
-The default setup only contains a single access level and an initial list of restricted services in the `data/access-levels` folder and the `data/restricted-services.yaml` file.
+The default setup only contains a single access level and an initial list of restricted services in the `datasets/classic/access-levels` folder and the `datasets/classic/restricted-services.yaml` file.
 
 To configure ingress and egress policies simply add `ingress_policies` and/or `egress_policies` folders under `data`, or point the factories to your own folders by changing the `factories_config` variable values.
 
@@ -55,7 +55,7 @@ Examples on how to write access level and policy YAML files are provided further
 
 The way we set up the perimeter for broad access is via a single geo-based access level, which is configured to allow access from one or more countries and deny all other traffic coming from outside the perimeter.
 
-The [`data/access-levels/geo.yaml`](data/access-levels/geo.yaml) file serves as an example and **should be edited to contain the countries you need** (or replaced/removed for more granular configuration).
+The [`datasets/classic/access-levels/geo.yaml`](datasets/classic/access-levels/geo.yaml) file serves as an example and **should be edited to contain the countries you need** (or replaced/removed for more granular configuration).
 
 ```yaml
 conditions:
@@ -83,13 +83,13 @@ Resource discovery can be configured (or turned off if needed) via the `resource
 
 ## How to run this stage
 
-This stage is meant to be executed after the [bootstrap](../0-bootstrap) stage has run, as it leverages the automation service account and bucket created there. It does not depend from any other stage and no other stage requires it, so it can be run in any order or even skipped entirely.
+This stage is meant to be executed after the [bootstrap](../0-org-setup) stage has run, as it leverages the automation service account and bucket created there. It does not depend from any other stage and no other stage requires it, so it can be run in any order or even skipped entirely.
 
 It's of course possible to run this stage in isolation, but that's outside the scope of this document, and you would need to refer to the code for the previous stage for the environment requirements.
 
 ### Provider and Terraform variables
 
-As all other FAST stages, the [mechanism used to pass variable values and pre-built provider files from one stage to the next](../0-bootstrap/README.md#output-files-and-cross-stage-variables) is also leveraged here.
+As all other FAST stages, the [mechanism used to pass variable values and pre-built provider files from one stage to the next](../0-org-setup/README.md#output-files-and-cross-stage-variables) is also leveraged here.
 
 The commands to link or copy the provider and terraform variable files can be get from the `fast-links.sh` script in the FAST stages folder, passing it a single argument with the local output files folder or GCS output bucket. The following examples demonstrate both cases, and the resulting commands that then need to be copy/pasted and run.
 
@@ -103,7 +103,7 @@ ln -s ~/fast-config/fast-test-00/providers/1-vpcsc-providers.tf ./
 
 # input files from other stages
 ln -s ~/fast-config/fast-test-00/tfvars/0-globals.auto.tfvars.json ./
-ln -s ~/fast-config/fast-test-00/tfvars/0-bootstrap.auto.tfvars.json ./
+ln -s ~/fast-config/fast-test-00/tfvars/0-org-setup.auto.tfvars.json ./
 
 # conventional place for stage tfvars (manually created)
 ln -s ~/fast-config/fast-test-00/1-vpcsc.auto.tfvars ./
@@ -120,7 +120,7 @@ gcloud storage cp gs://xxx-prod-iac-core-outputs-0/providers/1-vpcsc-providers.t
 
 # input files from other stages
 gcloud storage cp gs://xxx-prod-iac-core-outputs-0/tfvars/0-globals.auto.tfvars.json ./
-gcloud storage cp gs://xxx-prod-iac-core-outputs-0/tfvars/0-bootstrap.auto.tfvars.json ./
+gcloud storage cp gs://xxx-prod-iac-core-outputs-0/tfvars/0-org-setup.auto.tfvars.json ./
 
 # conventional place for stage tfvars (manually created)
 gcloud storage cp gs://xxx-prod-iac-core-outputs-0/1-vpcsc.auto.tfvars ./
@@ -135,7 +135,7 @@ The preconfigured provider file uses impersonation to run with this stage's auto
 Variables in this stage -- like most other FAST stages -- are broadly divided into three separate sets:
 
 - variables which refer to global values for the whole organization (org id, billing account id, prefix, etc.), which are pre-populated via the `0-globals.auto.tfvars.json` file linked or copied above
-- variables which refer to resources managed by previous stages, which are prepopulated here via the `0-bootstrap.auto.tfvars.json` file linked or copied above
+- variables which refer to resources managed by previous stages, which are prepopulated here via the `0-org-setup.auto.tfvars.json` file linked or copied above
 - and finally variables that optionally control this stage's behaviour and customizations, that you are expected to configure in a custom `terraform.tfvars` file
 
 The latter set is explained in the [Customization](#customizations) sections below, and the full list can be found in the [Variables](#variables) table at the bottom of this document.
@@ -167,7 +167,7 @@ The stage creates the org-level access policy by default. A pre-existing policy 
 
 The default perimeter is exposed via the `perimeters.default` variable which allows customizing most of its features.
 
-The only exception is the list of restricted services, which is configured via a YAML file with a list of services. To configure restricted services edit the list in `data/restricted-services.yaml`, or set the list of services in the `restricted_services` perimeter attribute.
+The only exception is the list of restricted services, which is configured via a YAML file with a list of services. To configure restricted services edit the list in `datasets/classic/restricted-services.yaml`, or set the list of services in the `restricted_services` perimeter attribute.
 
 Note that it's not enough to define access levels and ingress/egress policies via their variables or via factory files: in order for them to be deployed they also need to be referenced by name in the perimeter via the attributes shown in this example.
 
@@ -220,14 +220,14 @@ access_levels = {
 And the same defined instead via factory files.
 
 ```yaml
-# data/access-levels/a1.yaml
+# datasets/classic/access-levels/a1.yaml
 conditions:
   - members:
     - "user:user1@example.com"
 ```
 
 ```yaml
-# data/access-levels/a2.yaml
+# datasets/classic/access-levels/a2.yaml
 combining_function: OR
 conditions:
   - regions:
@@ -246,7 +246,7 @@ Like access levels, ingress and egress policies can be defined via tfvars or fac
 This is an example ingress policy defined in yaml:
 
 ```yaml
-# data/ingress-policies/sa-tf-test.yaml
+# datasets/classic/ingress-policies/sa-tf-test.yaml
 from:
   access_levels:
     - "*"
@@ -265,7 +265,7 @@ to:
 And this is an example egress policy:
 
 ```yaml
-# data/egress-policies/gcs-sa-foo.yaml
+# datasets/classic/egress-policies/gcs-sa-foo.yaml
 from:
   identities:
     - serviceAccount:foo@myproject.iam.gserviceaccount.com
@@ -301,18 +301,22 @@ Some references that might be useful in setting up this stage:
 
 | name | description | type | required | default | producer |
 |---|---|:---:|:---:|:---:|:---:|
-| [automation](variables-fast.tf#L17) | Automation resources created by the bootstrap stage. | <code title="object&#40;&#123;&#10;  outputs_bucket &#61; string&#10;&#125;&#41;">object&#40;&#123;&#8230;&#125;&#41;</code> | ✓ |  | <code>0-bootstrap</code> |
-| [organization](variables-fast.tf#L35) | Organization details. | <code title="object&#40;&#123;&#10;  domain      &#61; string&#10;  id          &#61; number&#10;  customer_id &#61; string&#10;&#125;&#41;">object&#40;&#123;&#8230;&#125;&#41;</code> | ✓ |  | <code>0-bootstrap</code> |
+| [automation](variables-fast.tf#L17) | Automation resources created by the bootstrap stage. | <code title="object&#40;&#123;&#10;  outputs_bucket &#61; string&#10;&#125;&#41;">object&#40;&#123;&#8230;&#125;&#41;</code> | ✓ |  | <code>0-org-setup</code> |
+| [organization](variables-fast.tf#L44) | Organization details. | <code title="object&#40;&#123;&#10;  domain      &#61; string&#10;  id          &#61; number&#10;  customer_id &#61; string&#10;&#125;&#41;">object&#40;&#123;&#8230;&#125;&#41;</code> | ✓ |  | <code>0-org-setup</code> |
 | [access_levels](variables.tf#L17) | Access level definitions. | <code title="map&#40;object&#40;&#123;&#10;  combining_function &#61; optional&#40;string&#41;&#10;  conditions &#61; optional&#40;list&#40;object&#40;&#123;&#10;    device_policy &#61; optional&#40;object&#40;&#123;&#10;      allowed_device_management_levels &#61; optional&#40;list&#40;string&#41;&#41;&#10;      allowed_encryption_statuses      &#61; optional&#40;list&#40;string&#41;&#41;&#10;      require_admin_approval           &#61; bool&#10;      require_corp_owned               &#61; bool&#10;      require_screen_lock              &#61; optional&#40;bool&#41;&#10;      os_constraints &#61; optional&#40;list&#40;object&#40;&#123;&#10;        os_type                    &#61; string&#10;        minimum_version            &#61; optional&#40;string&#41;&#10;        require_verified_chrome_os &#61; optional&#40;bool&#41;&#10;      &#125;&#41;&#41;&#41;&#10;    &#125;&#41;&#41;&#10;    ip_subnetworks         &#61; optional&#40;list&#40;string&#41;, &#91;&#93;&#41;&#10;    members                &#61; optional&#40;list&#40;string&#41;, &#91;&#93;&#41;&#10;    negate                 &#61; optional&#40;bool&#41;&#10;    regions                &#61; optional&#40;list&#40;string&#41;, &#91;&#93;&#41;&#10;    required_access_levels &#61; optional&#40;list&#40;string&#41;, &#91;&#93;&#41;&#10;    vpc_subnets            &#61; optional&#40;map&#40;list&#40;string&#41;&#41;, &#123;&#125;&#41;&#10;  &#125;&#41;&#41;, &#91;&#93;&#41;&#10;  description &#61; optional&#40;string&#41;&#10;&#125;&#41;&#41;">map&#40;object&#40;&#123;&#8230;&#125;&#41;&#41;</code> |  | <code>&#123;&#125;</code> |  |
 | [access_policy](variables.tf#L67) | Access policy id (used for tenant-level VPC-SC configurations). | <code>number</code> |  | <code>null</code> |  |
-| [egress_policies](variables.tf#L73) | Egress policy definitions that can be referenced in perimeters. | <code title="map&#40;object&#40;&#123;&#10;  title &#61; optional&#40;string&#41;&#10;  from &#61; object&#40;&#123;&#10;    access_levels &#61; optional&#40;list&#40;string&#41;, &#91;&#93;&#41;&#10;    identity_type &#61; optional&#40;string&#41;&#10;    identities    &#61; optional&#40;list&#40;string&#41;&#41;&#10;    resources     &#61; optional&#40;list&#40;string&#41;, &#91;&#93;&#41;&#10;  &#125;&#41;&#10;  to &#61; object&#40;&#123;&#10;    external_resources &#61; optional&#40;list&#40;string&#41;&#41;&#10;    operations &#61; optional&#40;list&#40;object&#40;&#123;&#10;      method_selectors     &#61; optional&#40;list&#40;string&#41;&#41;&#10;      permission_selectors &#61; optional&#40;list&#40;string&#41;&#41;&#10;      service_name         &#61; string&#10;    &#125;&#41;&#41;, &#91;&#93;&#41;&#10;    resources &#61; optional&#40;list&#40;string&#41;&#41;&#10;    roles     &#61; optional&#40;list&#40;string&#41;&#41;&#10;  &#125;&#41;&#10;&#125;&#41;&#41;">map&#40;object&#40;&#123;&#8230;&#125;&#41;&#41;</code> |  | <code>&#123;&#125;</code> |  |
-| [factories_config](variables.tf#L116) | Paths to folders that enable factory functionality. | <code title="object&#40;&#123;&#10;  access_levels       &#61; optional&#40;string, &#34;data&#47;access-levels&#34;&#41;&#10;  egress_policies     &#61; optional&#40;string, &#34;data&#47;egress-policies&#34;&#41;&#10;  ingress_policies    &#61; optional&#40;string, &#34;data&#47;ingress-policies&#34;&#41;&#10;  perimeters          &#61; optional&#40;string, &#34;data&#47;perimeters&#34;&#41;&#10;  restricted_services &#61; optional&#40;string, &#34;data&#47;restricted-services.yaml&#34;&#41;&#10;  context &#61; optional&#40;object&#40;&#123;&#10;    identity_sets &#61; optional&#40;map&#40;list&#40;string&#41;&#41;, &#123;&#125;&#41;&#10;    resource_sets &#61; optional&#40;map&#40;list&#40;string&#41;&#41;, &#123;&#125;&#41;&#10;    service_sets  &#61; optional&#40;map&#40;list&#40;string&#41;&#41;, &#123;&#125;&#41;&#10;  &#125;&#41;, &#123;&#125;&#41;&#10;&#125;&#41;">object&#40;&#123;&#8230;&#125;&#41;</code> |  | <code>&#123;&#125;</code> |  |
-| [ingress_policies](variables.tf#L134) | Ingress policy definitions that can be referenced in perimeters. | <code title="map&#40;object&#40;&#123;&#10;  title &#61; optional&#40;string&#41;&#10;  from &#61; object&#40;&#123;&#10;    access_levels &#61; optional&#40;list&#40;string&#41;, &#91;&#93;&#41;&#10;    identity_type &#61; optional&#40;string&#41;&#10;    identities    &#61; optional&#40;list&#40;string&#41;&#41;&#10;    resources     &#61; optional&#40;list&#40;string&#41;, &#91;&#93;&#41;&#10;  &#125;&#41;&#10;  to &#61; object&#40;&#123;&#10;    operations &#61; optional&#40;list&#40;object&#40;&#123;&#10;      method_selectors     &#61; optional&#40;list&#40;string&#41;&#41;&#10;      permission_selectors &#61; optional&#40;list&#40;string&#41;&#41;&#10;      service_name         &#61; string&#10;    &#125;&#41;&#41;, &#91;&#93;&#41;&#10;    resources &#61; optional&#40;list&#40;string&#41;&#41;&#10;    roles     &#61; optional&#40;list&#40;string&#41;&#41;&#10;  &#125;&#41;&#10;&#125;&#41;&#41;">map&#40;object&#40;&#123;&#8230;&#125;&#41;&#41;</code> |  | <code>&#123;&#125;</code> |  |
-| [logging](variables-fast.tf#L25) | Log writer identities for organization / folders. | <code title="object&#40;&#123;&#10;  project_number    &#61; string&#10;  writer_identities &#61; map&#40;string&#41;&#10;&#125;&#41;">object&#40;&#123;&#8230;&#125;&#41;</code> |  | <code>null</code> | <code>0-bootstrap</code> |
-| [outputs_location](variables.tf#L176) | Path where providers, tfvars files, and lists for the following stages are written. Leave empty to disable. | <code>string</code> |  | <code>null</code> |  |
-| [perimeters](variables.tf#L182) | Perimeter definitions. | <code title="map&#40;object&#40;&#123;&#10;  description               &#61; optional&#40;string&#41;&#10;  ignore_resource_changes   &#61; optional&#40;bool, false&#41;&#10;  title                     &#61; optional&#40;string&#41;&#10;  use_explicit_dry_run_spec &#61; optional&#40;bool, false&#41;&#10;  spec &#61; optional&#40;object&#40;&#123;&#10;    access_levels       &#61; optional&#40;list&#40;string&#41;&#41;&#10;    egress_policies     &#61; optional&#40;list&#40;string&#41;&#41;&#10;    ingress_policies    &#61; optional&#40;list&#40;string&#41;&#41;&#10;    restricted_services &#61; optional&#40;list&#40;string&#41;&#41;&#10;    resources           &#61; optional&#40;list&#40;string&#41;&#41;&#10;    vpc_accessible_services &#61; optional&#40;object&#40;&#123;&#10;      allowed_services   &#61; list&#40;string&#41;&#10;      enable_restriction &#61; optional&#40;bool, true&#41;&#10;    &#125;&#41;&#41;&#10;  &#125;&#41;&#41;&#10;  status &#61; optional&#40;object&#40;&#123;&#10;    access_levels       &#61; optional&#40;list&#40;string&#41;&#41;&#10;    egress_policies     &#61; optional&#40;list&#40;string&#41;&#41;&#10;    ingress_policies    &#61; optional&#40;list&#40;string&#41;&#41;&#10;    resources           &#61; optional&#40;list&#40;string&#41;&#41;&#10;    restricted_services &#61; optional&#40;list&#40;string&#41;&#41;&#10;    vpc_accessible_services &#61; optional&#40;object&#40;&#123;&#10;      allowed_services   &#61; list&#40;string&#41;&#10;      enable_restriction &#61; optional&#40;bool, true&#41;&#10;    &#125;&#41;&#41;&#10;  &#125;&#41;&#41;&#10;&#125;&#41;&#41;">map&#40;object&#40;&#123;&#8230;&#125;&#41;&#41;</code> |  | <code>&#123;&#125;</code> |  |
-| [resource_discovery](variables.tf#L216) | Automatic discovery of perimeter projects. | <code title="object&#40;&#123;&#10;  enabled          &#61; optional&#40;bool, true&#41;&#10;  ignore_folders   &#61; optional&#40;list&#40;string&#41;, &#91;&#93;&#41;&#10;  ignore_projects  &#61; optional&#40;list&#40;string&#41;, &#91;&#93;&#41;&#10;  include_projects &#61; optional&#40;list&#40;string&#41;, &#91;&#93;&#41;&#10;&#125;&#41;">object&#40;&#123;&#8230;&#125;&#41;</code> |  | <code>&#123;&#125;</code> |  |
-| [root_node](variables-fast.tf#L45) | Root node for the hierarchy, if running in tenant mode. | <code>string</code> |  | <code>null</code> | <code>0-bootstrap</code> |
+| [context](variables.tf#L73) | External context used in replacements. | <code title="object&#40;&#123;&#10;  identity_sets   &#61; optional&#40;map&#40;list&#40;string&#41;&#41;, &#123;&#125;&#41;&#10;  project_numbers &#61; optional&#40;map&#40;number&#41;, &#123;&#125;&#41;&#10;  resource_sets   &#61; optional&#40;map&#40;list&#40;string&#41;&#41;, &#123;&#125;&#41;&#10;  service_sets    &#61; optional&#40;map&#40;list&#40;string&#41;&#41;, &#123;&#125;&#41;&#10;&#125;&#41;">object&#40;&#123;&#8230;&#125;&#41;</code> |  | <code>&#123;&#125;</code> |  |
+| [egress_policies](variables.tf#L85) | Egress policy definitions that can be referenced in perimeters. | <code title="map&#40;object&#40;&#123;&#10;  title &#61; optional&#40;string&#41;&#10;  from &#61; object&#40;&#123;&#10;    access_levels &#61; optional&#40;list&#40;string&#41;, &#91;&#93;&#41;&#10;    identity_type &#61; optional&#40;string&#41;&#10;    identities    &#61; optional&#40;list&#40;string&#41;&#41;&#10;    resources     &#61; optional&#40;list&#40;string&#41;, &#91;&#93;&#41;&#10;  &#125;&#41;&#10;  to &#61; object&#40;&#123;&#10;    external_resources &#61; optional&#40;list&#40;string&#41;&#41;&#10;    operations &#61; optional&#40;list&#40;object&#40;&#123;&#10;      method_selectors     &#61; optional&#40;list&#40;string&#41;&#41;&#10;      permission_selectors &#61; optional&#40;list&#40;string&#41;&#41;&#10;      service_name         &#61; string&#10;    &#125;&#41;&#41;, &#91;&#93;&#41;&#10;    resources &#61; optional&#40;list&#40;string&#41;&#41;&#10;    roles     &#61; optional&#40;list&#40;string&#41;&#41;&#10;  &#125;&#41;&#10;&#125;&#41;&#41;">map&#40;object&#40;&#123;&#8230;&#125;&#41;&#41;</code> |  | <code>&#123;&#125;</code> |  |
+| [factories_config](variables.tf#L128) | Paths to folders that enable factory functionality. | <code title="object&#40;&#123;&#10;  access_levels       &#61; optional&#40;string, &#34;datasets&#47;classic&#47;access-levels&#34;&#41;&#10;  egress_policies     &#61; optional&#40;string, &#34;datasets&#47;classic&#47;egress-policies&#34;&#41;&#10;  ingress_policies    &#61; optional&#40;string, &#34;datasets&#47;classic&#47;ingress-policies&#34;&#41;&#10;  perimeters          &#61; optional&#40;string, &#34;datasets&#47;classic&#47;perimeters&#34;&#41;&#10;  restricted_services &#61; optional&#40;string, &#34;datasets&#47;classic&#47;restricted-services.yaml&#34;&#41;&#10;&#125;&#41;">object&#40;&#123;&#8230;&#125;&#41;</code> |  | <code>&#123;&#125;</code> |  |
+| [iam_principals](variables-fast.tf#L26) | Org-level IAM principals. | <code>map&#40;string&#41;</code> |  | <code>&#123;&#125;</code> | <code>0-org-setup</code> |
+| [ingress_policies](variables.tf#L141) | Ingress policy definitions that can be referenced in perimeters. | <code title="map&#40;object&#40;&#123;&#10;  title &#61; optional&#40;string&#41;&#10;  from &#61; object&#40;&#123;&#10;    access_levels &#61; optional&#40;list&#40;string&#41;, &#91;&#93;&#41;&#10;    identity_type &#61; optional&#40;string&#41;&#10;    identities    &#61; optional&#40;list&#40;string&#41;&#41;&#10;    resources     &#61; optional&#40;list&#40;string&#41;, &#91;&#93;&#41;&#10;  &#125;&#41;&#10;  to &#61; object&#40;&#123;&#10;    operations &#61; optional&#40;list&#40;object&#40;&#123;&#10;      method_selectors     &#61; optional&#40;list&#40;string&#41;&#41;&#10;      permission_selectors &#61; optional&#40;list&#40;string&#41;&#41;&#10;      service_name         &#61; string&#10;    &#125;&#41;&#41;, &#91;&#93;&#41;&#10;    resources &#61; optional&#40;list&#40;string&#41;&#41;&#10;    roles     &#61; optional&#40;list&#40;string&#41;&#41;&#10;  &#125;&#41;&#10;&#125;&#41;&#41;">map&#40;object&#40;&#123;&#8230;&#125;&#41;&#41;</code> |  | <code>&#123;&#125;</code> |  |
+| [logging](variables-fast.tf#L34) | Log writer identities for organization / folders. | <code title="object&#40;&#123;&#10;  writer_identities &#61; map&#40;string&#41;&#10;  project_number    &#61; optional&#40;string&#41;&#10;&#125;&#41;">object&#40;&#123;&#8230;&#125;&#41;</code> |  | <code>null</code> | <code>0-org-setup</code> |
+| [outputs_location](variables.tf#L183) | Path where providers, tfvars files, and lists for the following stages are written. Leave empty to disable. | <code>string</code> |  | <code>null</code> |  |
+| [perimeters](variables.tf#L189) | Perimeter definitions. | <code title="map&#40;object&#40;&#123;&#10;  description               &#61; optional&#40;string&#41;&#10;  ignore_resource_changes   &#61; optional&#40;bool, false&#41;&#10;  title                     &#61; optional&#40;string&#41;&#10;  use_explicit_dry_run_spec &#61; optional&#40;bool, false&#41;&#10;  spec &#61; optional&#40;object&#40;&#123;&#10;    access_levels       &#61; optional&#40;list&#40;string&#41;&#41;&#10;    egress_policies     &#61; optional&#40;list&#40;string&#41;&#41;&#10;    ingress_policies    &#61; optional&#40;list&#40;string&#41;&#41;&#10;    restricted_services &#61; optional&#40;list&#40;string&#41;&#41;&#10;    resources           &#61; optional&#40;list&#40;string&#41;&#41;&#10;    vpc_accessible_services &#61; optional&#40;object&#40;&#123;&#10;      allowed_services   &#61; list&#40;string&#41;&#10;      enable_restriction &#61; optional&#40;bool, true&#41;&#10;    &#125;&#41;&#41;&#10;  &#125;&#41;&#41;&#10;  status &#61; optional&#40;object&#40;&#123;&#10;    access_levels       &#61; optional&#40;list&#40;string&#41;&#41;&#10;    egress_policies     &#61; optional&#40;list&#40;string&#41;&#41;&#10;    ingress_policies    &#61; optional&#40;list&#40;string&#41;&#41;&#10;    resources           &#61; optional&#40;list&#40;string&#41;&#41;&#10;    restricted_services &#61; optional&#40;list&#40;string&#41;&#41;&#10;    vpc_accessible_services &#61; optional&#40;object&#40;&#123;&#10;      allowed_services   &#61; list&#40;string&#41;&#10;      enable_restriction &#61; optional&#40;bool, true&#41;&#10;    &#125;&#41;&#41;&#10;  &#125;&#41;&#41;&#10;&#125;&#41;&#41;">map&#40;object&#40;&#123;&#8230;&#125;&#41;&#41;</code> |  | <code>&#123;&#125;</code> |  |
+| [project_numbers](variables-fast.tf#L55) | Project numbers. | <code>map&#40;number&#41;</code> |  | <code>&#123;&#125;</code> | <code>0-org-setup</code> |
+| [resource_discovery](variables.tf#L223) | Automatic discovery of perimeter projects. | <code title="object&#40;&#123;&#10;  enabled          &#61; optional&#40;bool, true&#41;&#10;  ignore_folders   &#61; optional&#40;list&#40;string&#41;, &#91;&#93;&#41;&#10;  ignore_projects  &#61; optional&#40;list&#40;string&#41;, &#91;&#93;&#41;&#10;  include_projects &#61; optional&#40;list&#40;string&#41;, &#91;&#93;&#41;&#10;&#125;&#41;">object&#40;&#123;&#8230;&#125;&#41;</code> |  | <code>&#123;&#125;</code> |  |
+| [root_node](variables-fast.tf#L63) | Root node for the hierarchy, if running in tenant mode. | <code>string</code> |  | <code>null</code> | <code>0-org-setup</code> |
+| [service_accounts](variables-fast.tf#L77) | Org-level service accounts. | <code>map&#40;string&#41;</code> |  | <code>&#123;&#125;</code> | <code>0-org-setup</code> |
 
 ## Outputs
 

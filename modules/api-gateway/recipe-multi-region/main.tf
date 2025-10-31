@@ -55,8 +55,8 @@ module "project" {
   source = "../../../modules/project"
   name   = var.project_id
   project_reuse = {
-    use_data_source    = var._testing == null
-    project_attributes = var._testing
+    use_data_source = var._testing == null
+    attributes      = var._testing
   }
   services = [
     "apigateway.googleapis.com",
@@ -95,7 +95,9 @@ module "functions" {
     entry_point = "helloGET"
     runtime     = "nodejs22"
   }
-  service_account_create = true
+  service_account_config = {
+    create = true
+  }
   iam = {
     "roles/run.invoker" = [module.sa.iam_email]
   }

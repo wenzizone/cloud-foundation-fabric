@@ -65,6 +65,19 @@ variable "authorized_views" {
   default = []
 }
 
+variable "context" {
+  description = "Context-specific interpolations."
+  type = object({
+    custom_roles   = optional(map(string), {})
+    iam_principals = optional(map(string), {})
+    locations      = optional(map(string), {})
+    project_ids    = optional(map(string), {})
+    tag_values     = optional(map(string), {})
+  })
+  default  = {}
+  nullable = false
+}
+
 variable "dataset_access" {
   description = "Set access in the dataset resource instead of using separate resources."
   type        = bool
@@ -174,6 +187,7 @@ variable "routines" {
     imported_libraries   = optional(list(string))
     determinism_level    = optional(string)
     data_governance_type = optional(string)
+    return_type          = optional(string)
     return_table_type    = optional(string)
     arguments = optional(map(object({
       argument_kind = optional(string)
@@ -303,6 +317,12 @@ variable "views" {
     friendly_name       = optional(string)
     labels              = optional(map(string), {})
     use_legacy_sql      = optional(bool)
+    schema = optional(list(object({
+      name        = string
+      type        = string
+      description = string
+      mode        = optional(string)
+    })))
   }))
   default = {}
 }

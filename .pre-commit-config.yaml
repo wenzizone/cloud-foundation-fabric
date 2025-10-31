@@ -1,4 +1,4 @@
-# Copyright 2024 Google LLC
+# Copyright 2025 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,77 +23,112 @@ repos:
     - --args=--config=__GIT_WORKING_DIR__/.tflint.hcl
     files: ^modules/
     exclude: (tests/fixtures/|tools/lockfile/|^fast)
-  # - id: terraform_validate
-  #   args:
-  #   - --hook-config=--retry-once-with-cleanup=true
 - repo: local
   hooks:
   - id: cff-readme
     name: Regenerate README.md with tfdoc.py
     entry: tools/pre-commit-tfdoc.sh
-    language: script
-    #types: [terraform]
+    language: python
+    additional_dependencies:
+    - click
+    - deepdiff
+    - ghapi
+    - iso8601
+    - marko
+    - requests
+    - yamale
+    - jsonschema
+    - BeautifulSoup4
+    # types: [terraform]
     files: ^(modules|fast).*(tf|README.md)$
     pass_filenames: true
     require_serial: true
   - id: licenese
     name: Check license presence and other boilerplate checks
-    language: system
+    language: python
     entry: tools/check_boilerplate.py
+    additional_dependencies:
+    - click
+    - deepdiff
+    - ghapi
+    - iso8601
+    - marko
+    - requests
+    - yamale
+    - jsonschema
+    - BeautifulSoup4
     pass_filenames: true
     args:
-    -  --scan-files
+    - --scan-files
   - id: tflint-fast
     name: Checking FAST code with tflint
     entry: tools/tflint-fast.py
-    language: system
-    pass_filenames: false
+    language: python
+    additional_dependencies:
+    - click
+    - deepdiff
+    - ghapi
+    - iso8601
+    - marko
+    - requests
+    - yamale
+    - jsonschema
+    - BeautifulSoup4
+    pass_filenames: true
     require_serial: true
-    files: ^fast/.*tf
   - id: versions
-    name: Align Terraform provider versions
-    language: script
-    files: (versions.tf|^default-versions.tf)$
+    name: Align Terraform/OpenTofu provider versions
+    language: python
+    additional_dependencies:
+    - click
+    files: (versions.tf|^default-versions.tf|versions.tofu|default-versions.tofu)$
     pass_filenames: false
-    entry: /usr/bin/find . -type f -name 'versions.tf' -exec cp default-versions.tf {} \;
-  - id: versions_tofu
-    name: Align OpenTofu provider versions
-    language: script
-    files: (versions.tofu|^default-versions.tofu)$
-    pass_filenames: false
-    entry: /usr/bin/find . -type f -name 'versions.tofu' -exec cp default-versions.tofu {} \;
-  - id: validate_metadata
-    name: Validate blueprints metadata
-    language: system
-    pass_filenames: false
-    files: ^blueprints
-    entry: tools/validate_metadata.py -v --failed-only blueprints
+    entry: tools/versions.py --quiet
   - id: check-names
     name: Check name lengths for FAST
-    language: system
+    language: python
+    additional_dependencies:
+    - click
+    - deepdiff
+    - ghapi
+    - iso8601
+    - marko
+    - requests
+    - yamale
+    - jsonschema
+    - BeautifulSoup4
     pass_filenames: false
     files: ^fast
     entry: tools/check_names.py --prefix-length=10 --failed-only fast/stages
   - id: check-links
     name: Check links in markdown files
-    language: system
+    language: python
+    additional_dependencies:
+    - click
+    - deepdiff
+    - ghapi
+    - iso8601
+    - marko
+    - requests
+    - yamale
+    - jsonschema
+    - BeautifulSoup4
     entry: tools/check_links.py --no-show-summary --scan-files
   - id: duplicate-diff
     name: duplicate-diff
     entry: python3 tools/duplicate-diff.py
     language: python
     language_version: python3
-    files: '.*(\.sh|\.tf|\.tftpl|\.tpl)$'
+    files: '.*(\.sh|\.tf|\.tftpl|\.tpl|\.yaml)$'
     pass_filenames: true
     require_serial: true
 
-
-# - repo: https://github.com/adrienverge/yamllint
-#   rev: v1.34.0
-#   hooks:
-#   - id: yamllint
-#     args: [-c=.yamllint, --no-warnings]
-#     exclude: (/templates/|modules/cloud-config-container/)
+- repo: https://github.com/adrienverge/yamllint
+  rev: 79a6b2b1392eaf49cdd32ac4f14be1a809bbd8f7  # v1.37.0
+  hooks:
+  - id: yamllint
+    args: ["-c=.yamllint", "--no-warnings"]
+    exclude: (/templates/|modules/cloud-config-container/)
 
 - repo: https://github.com/jumanjihouse/pre-commit-hooks
   rev: "3.0.0"
@@ -104,7 +139,7 @@ repos:
     exclude: ".*tpl"
 
 - repo: https://github.com/pre-commit/pre-commit-hooks
-  rev: v4.5.0
+  rev: v6.0.0
   hooks:
   - id: end-of-file-fixer
   - id: trailing-whitespace
@@ -117,9 +152,10 @@ repos:
   rev: v0.40.2
   hooks:
   - id: yapf
+    require_serial: true
 
 - repo: https://github.com/codespell-project/codespell
-  rev: v2.2.6
+  rev: v2.4.1
   hooks:
   - id: codespell
     exclude: (requirements.txt$|excalidraw$|package-lock\.json$|go\.sum$|^CHANGELOG.md$)

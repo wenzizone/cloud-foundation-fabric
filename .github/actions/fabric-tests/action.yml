@@ -1,4 +1,4 @@
-# Copyright 2024 Google LLC
+# Copyright 2025 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -66,12 +66,13 @@ runs:
       uses: actions/cache@v4
       with:
         path: ${{ env.TF_PLUGIN_CACHE_DIR }}
+        # yamllint disable-line rule:line-length
         key: ${{ runner.os }}-${{ inputs.TERRAFORM_FLAVOUR  }}-${{ inputs.TERRAFORM_VERSION }}-${{ hashFiles('tools/lockfile/.terraform.lock.hcl') }}
     # avoid conflicts with user-installed providers on local machines
     - name: Pin provider versions
       shell: bash
       run: |
-        for f in $(find . -name versions.tf); do
+        for f in $(find . -name versions.tf  -o -name versions.tofu); do
           sed -i 's/>=\(.*# tftest\)/=\1/g' $f;
         done
     - name: Install Python Dependencies

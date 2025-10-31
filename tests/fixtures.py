@@ -193,6 +193,7 @@ def plan_validator(module_path, inventory_paths, basedir, tf_var_files=None,
     # - include a descriptive error message to the assert
     # print(yaml.dump({'values': summary.values}))
     # print("", yaml.dump({'counts': summary.counts}))
+    # print(yaml.dump({'outputs': summary.outputs}))
 
     if 'values' in inventory:
       try:
@@ -280,7 +281,13 @@ def validate_plan_object(expected_value, plan_value, relative_path,
 
   # all other objects
   else:
-    assert plan_value == expected_value, \
+    if isinstance(plan_value, str) and isinstance(expected_value, str):
+      # plan_value may contain newline at the end which is hard to replicate in
+      # expected_value YAML
+      is_ok = plan_value.strip() == expected_value.strip()
+    else:
+      is_ok = plan_value == expected_value
+    assert is_ok, \
       f'{relative_path}: {relative_address} failed. Got `{plan_value}`, expected `{expected_value}`'
 
 

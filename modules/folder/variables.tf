@@ -74,6 +74,20 @@ variable "contacts" {
   nullable    = false
 }
 
+
+variable "context" {
+  description = "Context-specific interpolations."
+  type = object({
+    condition_vars = optional(map(map(string)), {})
+    custom_roles   = optional(map(string), {})
+    folder_ids     = optional(map(string), {})
+    iam_principals = optional(map(string), {})
+    tag_values     = optional(map(string), {})
+  })
+  default  = {}
+  nullable = false
+}
+
 variable "deletion_protection" {
   description = "Deletion protection setting for this folder."
   type        = bool
@@ -83,10 +97,9 @@ variable "deletion_protection" {
 variable "factories_config" {
   description = "Paths to data files and folders that enable factory functionality."
   type = object({
-    org_policies = optional(string)
-    context = optional(object({
-      org_policies = optional(map(map(string)), {})
-    }), {})
+    org_policies           = optional(string)
+    pam_entitlements       = optional(string)
+    scc_sha_custom_modules = optional(string)
   })
   nullable = false
   default  = {}
@@ -105,6 +118,10 @@ variable "folder_create" {
   description = "Create folder. When set to false, uses id to reference an existing folder."
   type        = bool
   default     = true
+  validation {
+    condition     = var.folder_create || var.id != null
+    error_message = "Variable `id` cannot be null when `folder_create` is false."
+  }
 }
 
 variable "id" {
@@ -152,8 +169,12 @@ variable "parent" {
   type        = string
   default     = null
   validation {
-    condition     = var.parent == null || can(regex("(organizations|folders)/[0-9]+", var.parent))
-    error_message = "Parent must be of the form folders/folder_id or organizations/organization_id."
+    condition = (
+      var.parent == null ||
+      startswith(coalesce(var.parent, "-"), "$folder_ids:") ||
+      can(regex("(organizations|folders)/[0-9]+", coalesce(var.parent, "-")))
+    )
+    error_message = "Parent must be of the form folders/folder_id or organizations/organization_id, or map to a context variable via $folder_ids:."
   }
 }
 

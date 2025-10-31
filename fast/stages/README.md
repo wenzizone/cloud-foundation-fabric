@@ -9,7 +9,7 @@ When deploying as part of a whole organization setup, each stage provides inform
 This has two important consequences:
 
 - any stage can be swapped out and replaced by different code as long as it respects the contract, by providing a predefined set of outputs and optionally accepting a predefined set of variables
-- data flow between stages can be partially automated (see [stage 0 documentation on output files](./0-bootstrap/README.md#output-files-and-cross-stage-variables)), reducing the effort and pain required to compile variables by hand
+- data flow between stages can be partially automated (see [stage 0 documentation on output files](./0-org-setup/README.md#output-files-and-cross-stage-variables)), reducing the effort and pain required to compile variables by hand
 
 One important assumption is that the flow of data is always forward looking (or sideways for optional components), so no stage needs to depend on outputs generated further down the chain. This greatly simplifies both the logic and the implementation, and allows stages to be effectively independent.
 
@@ -21,33 +21,29 @@ Stages encapsulate core designs and functionality that is common in most type of
 
 To destroy a previous FAST deployment follow the instructions detailed in [cleanup](CLEANUP.md).
 
-## Organization (0 and 1)
+## Organization (0)
 
-- [Bootstrap](0-bootstrap/README.md)  
-  Enables critical organization-level functionality that depends on broad permissions. It has two primary purposes. The first is to bootstrap the resources needed for automation of this and the following stages (service accounts, GCS buckets). And secondly, it applies the minimum amount of configuration needed at the organization level to avoid the need of broad permissions later on, and to implement from the start critical auditing or security features like organization policies, sinks and exports.\
-  Exports: automation variables, organization-level custom roles
-- [Resource Management](1-resman/README.md)  
-  Creates the base resource hierarchy (folders) and the automation resources that will be required later to delegate deployment of each part of the hierarchy to separate stages. This stage also configures resource management tags used in scoping specific IAM roles on the resource hierarchy.\
-  Exports: folder ids, automation service account emails, tags
+- [Organization Setup](./0-org-setup/README.md)
+  This stage combines the legacy bootstrap and resource management stages described below, allowing easy configuration of all related resources via factories. Its flexibility supports any type of organizational design, while still supporting traditional FAST stages like VPC Service Controls, security, networking, and any stage 3.
+  
+## VPC Service Controls (1)
+
 - [VPC Service Controls](./1-vpcsc/README.md)
   Optionally configures VPC Service Controls protection for the organization.
-
-## Multitenancy
-
-Implemented as an [add-on stage 1](../addons/1-resman-tenants/), with optional FAST compatibility for tenants.
 
 ## Shared resources (2)
 
 - [Security](2-security/README.md)  
   Manages centralized security configurations in a separate stage, and is typically owned by the security team. This stage implements VPC Security Controls via separate perimeters for environments and central services, and creates projects to host centralized KMS keys used by the whole organization. It's meant to be easily extended to include other security-related resources which are required, like Secret Manager.\
-  Exports: KMS key ids
-- Networking ([Peering/VPN](2-networking-a-simple/README.md)/[NVA (w/ optional BGP support)](2-networking-b-nva/README.md)/[Separate environments](2-networking-c-separate-envs/README.md))  
-  Manages centralized network resources in a separate stage, and is typically owned by the networking team. This stage implements a hub-and-spoke design, and includes connectivity via VPN to on-premises, and YAML-based factories for firewall rules (hierarchical and VPC-level) and subnets. It's currently available in four flavors: [spokes connected via VPC peering/VPN](2-networking-a-simple/README.md), [spokes connected via appliances (w/ optional BGP support)](2-networking-b-nva/README.md) and [separated network environments](2-networking-c-separate-envs/README.md).\
+  Exports: KMS key ids, CA ids
+- Networking ([Networking factory](2-networking/README.md))/Networking ([Peering/VPN](2-networking-legacy-a-simple/README.md)/[NVA (w/ optional BGP support)](2-networking-legacy-b-nva/README.md)/[Separate environments](2-networking-legacy-c-separate-envs/README.md))  
+  Manages centralized network resources in a separate stage, and is typically owned by the networking team. This stage implements a hub-and-spoke design, and includes connectivity via VPN to on-premises, and YAML-based factories for firewall rules (hierarchical and VPC-level) and subnets. It's currently available in four flavors: [spokes connected via VPC peering/VPN](2-networking-legacy-a-simple/README.md), [spokes connected via appliances (w/ optional BGP support)](2-networking-legacy-b-nva/README.md) and [separated network environments](2-networking-legacy-c-separate-envs/README.md).\
   Exports: host project ids and numbers, vpc self links
 - [Project Factory](./2-project-factory/)  
   YAML-based factory to create and configure application or team-level projects. Configuration includes VPC-level settings for Shared VPC, service-level configuration for CMEK encryption via centralized keys, and service account creation for workloads and applications. This stage can be cloned if an org-wide or dedicated per-environment factories are needed.
 
 ## Environment-level resources (3)
 
-- [GKE Multitenant](3-gke-dev/)
-- [Google Cloud VMware Engine](3-gcve-dev/)
+- [Data Platform](./3-data-platform-dev/)
+- [GKE Multitenant](./3-gke-dev/)
+- [Google Cloud VMware Engine](./3-gcve-dev/)

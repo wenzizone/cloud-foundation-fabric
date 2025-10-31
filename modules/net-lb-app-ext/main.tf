@@ -21,8 +21,16 @@ locals {
   }
   fwd_rule_target = (
     var.protocol == "HTTPS"
-    ? google_compute_target_https_proxy.default[0].id
-    : google_compute_target_http_proxy.default[0].id
+    ? (
+      var.use_classic_version
+      ? google_compute_target_https_proxy.default[0].id
+      : google_compute_target_https_proxy.new[0].id
+    )
+    : (
+      var.use_classic_version
+      ? google_compute_target_http_proxy.default[0].id
+      : google_compute_target_http_proxy.new[0].id
+    )
   )
   proxy_ssl_certificates = concat(
     coalesce(var.ssl_certificates.certificate_ids, []),
@@ -46,7 +54,7 @@ resource "google_compute_global_forwarding_rule" "default" {
   for_each    = var.forwarding_rules_config
   project     = var.project_id
   name        = coalesce(each.value.name, local.fwd_rule_names[each.key])
-  description = coalesce(each.value.description, var.description)
+  description = each.value.description
   ip_address  = each.value.address
   ip_protocol = "TCP"
   ip_version  = each.value.address != null ? null : each.value.ipv6 == true ? "IPV6" : "IPV4" # do not set if address is provided
@@ -73,7 +81,7 @@ resource "google_compute_ssl_certificate" "default" {
 resource "google_compute_managed_ssl_certificate" "default" {
   for_each    = var.ssl_certificates.managed_configs
   project     = var.project_id
-  name        = "${var.name}-${each.key}"
+  name        = coalesce(each.value.name, "${var.name}-${each.key}")
   description = each.value.description
   managed {
     domains = each.value.domains
@@ -83,20 +91,51 @@ resource "google_compute_managed_ssl_certificate" "default" {
 # proxies
 
 resource "google_compute_target_http_proxy" "default" {
-  count       = var.protocol == "HTTPS" ? 0 : 1
+  count = (
+    var.protocol == "HTTP" && var.use_classic_version ? 1 : 0
+  )
   project     = var.project_id
-  name        = var.name
-  description = var.description
+  name        = coalesce(var.https_proxy_config.name, var.name)
+  description = var.http_proxy_config.description
   url_map     = google_compute_url_map.default.id
 }
 
 resource "google_compute_target_https_proxy" "default" {
-  count                            = var.protocol == "HTTPS" ? 1 : 0
+  count = (
+    var.protocol == "HTTPS" && var.use_classic_version ? 1 : 0
+  )
   project                          = var.project_id
-  name                             = var.name
-  description                      = var.description
+  name                             = coalesce(var.https_proxy_config.name, var.name)
+  description                      = var.https_proxy_config.description
   certificate_map                  = var.https_proxy_config.certificate_map
   certificate_manager_certificates = var.https_proxy_config.certificate_manager_certificates
+  quic_override                    = var.https_proxy_config.quic_override
+  ssl_certificates                 = length(local.proxy_ssl_certificates) == 0 ? null : local.proxy_ssl_certificates
+  ssl_policy                       = var.https_proxy_config.ssl_policy
+  url_map                          = google_compute_url_map.default.id
+  server_tls_policy                = var.https_proxy_config.mtls_policy
+}
+
+resource "google_compute_target_http_proxy" "new" {
+  count = (
+    var.protocol == "HTTP" && !var.use_classic_version ? 1 : 0
+  )
+  project     = var.project_id
+  name        = coalesce(var.https_proxy_config.name, var.name)
+  description = var.http_proxy_config.description
+  url_map     = google_compute_url_map.default.id
+}
+
+resource "google_compute_target_https_proxy" "new" {
+  count = (
+    var.protocol == "HTTPS" && !var.use_classic_version ? 1 : 0
+  )
+  project                          = var.project_id
+  name                             = coalesce(var.https_proxy_config.name, var.name)
+  description                      = var.https_proxy_config.description
+  certificate_map                  = var.https_proxy_config.certificate_map
+  certificate_manager_certificates = var.https_proxy_config.certificate_manager_certificates
+  http_keep_alive_timeout_sec      = var.https_proxy_config.http_keepalive_timeout
   quic_override                    = var.https_proxy_config.quic_override
   ssl_certificates                 = length(local.proxy_ssl_certificates) == 0 ? null : local.proxy_ssl_certificates
   ssl_policy                       = var.https_proxy_config.ssl_policy

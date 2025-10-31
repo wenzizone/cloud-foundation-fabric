@@ -69,8 +69,11 @@ module "dd-folders" {
     })
   }
   iam_by_principals = {
-    for k, v in each.value.folder_config.iam_by_principals :
-    lookup(var.factories_config.context.iam_principals, k, k) => v
+    for principal, roles_list in {
+      for k, v in each.value.folder_config.iam_by_principals :
+      lookup(var.factories_config.context.iam_principals, k, k) => v...
+    } :
+    principal => flatten(roles_list)
   }
 }
 
@@ -118,7 +121,7 @@ module "dd-projects-iam" {
   name     = module.dd-projects[each.key].project_id
   project_reuse = {
     use_data_source = false
-    project_attributes = {
+    attributes = {
       name             = module.dd-projects[each.key].name
       number           = module.dd-projects[each.key].number
       services_enabled = local.dd_services[each.key]
@@ -179,8 +182,11 @@ module "dd-projects-iam" {
     }
   )
   iam_by_principals = {
-    for k, v in each.value.project_config.iam_by_principals :
-    lookup(var.factories_config.context.iam_principals, k, k) => v
+    for principal, roles_list in {
+      for k, v in each.value.project_config.iam_by_principals :
+      lookup(var.factories_config.context.iam_principals, k, k) => v...
+    } :
+    principal => flatten(roles_list)
   }
   shared_vpc_service_config = (
     each.value.project_config.shared_vpc_service_config == null

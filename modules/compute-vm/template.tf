@@ -20,20 +20,28 @@ locals {
 }
 
 resource "google_compute_instance_template" "default" {
-  provider              = google-beta
-  count                 = local.template_create && !local.template_regional ? 1 : 0
-  project               = var.project_id
-  region                = local.region
-  name_prefix           = "${var.name}-"
-  description           = var.description
-  tags                  = var.tags
-  machine_type          = var.instance_type
-  min_cpu_platform      = var.min_cpu_platform
-  can_ip_forward        = var.can_ip_forward
-  metadata              = var.metadata
-  labels                = var.labels
-  resource_manager_tags = var.tag_bindings_immutable
-
+  provider                = google-beta
+  count                   = local.template_create && !local.template_regional ? 1 : 0
+  project                 = local.project_id
+  region                  = local.region
+  name_prefix             = "${var.name}-"
+  description             = var.description
+  tags                    = var.tags
+  machine_type            = var.instance_type
+  min_cpu_platform        = var.min_cpu_platform
+  can_ip_forward          = var.can_ip_forward
+  metadata                = var.metadata
+  metadata_startup_script = var.metadata_startup_script
+  labels                  = var.labels
+  resource_manager_tags   = var.tag_bindings_immutable
+  resource_policies = (
+    var.resource_policies == null && var.instance_schedule == null
+    ? null
+    : concat(
+      coalesce(var.resource_policies, []),
+      coalesce(local.ischedule, [])
+    )
+  )
   dynamic "advanced_machine_features" {
     for_each = local.advanced_mf != null ? [""] : []
     content {
@@ -59,7 +67,11 @@ resource "google_compute_instance_template" "default" {
     dynamic "disk_encryption_key" {
       for_each = var.encryption != null ? [""] : []
       content {
-        kms_key_self_link = var.encryption.kms_key_self_link
+        kms_key_self_link = lookup(
+          local.ctx.kms_keys,
+          var.encryption.kms_key_self_link,
+          var.encryption.kms_key_self_link
+        )
       }
     }
   }
@@ -109,7 +121,11 @@ resource "google_compute_instance_template" "default" {
       dynamic "disk_encryption_key" {
         for_each = var.encryption != null ? [""] : []
         content {
-          kms_key_self_link = var.encryption.kms_key_self_link
+          kms_key_self_link = lookup(
+            local.ctx.kms_keys,
+            var.encryption.kms_key_self_link,
+            var.encryption.kms_key_self_link
+          )
         }
       }
     }
@@ -119,15 +135,27 @@ resource "google_compute_instance_template" "default" {
     for_each = var.network_interfaces
     iterator = config
     content {
-      network    = config.value.network
-      subnetwork = config.value.subnetwork
-      network_ip = try(config.value.addresses.internal, null)
+      network = lookup(
+        local.ctx.networks, config.value.network, config.value.network
+      )
+      subnetwork = lookup(
+        local.ctx.subnets, config.value.subnetwork, config.value.subnetwork
+      )
+      network_ip = try(
+        local.ctx.addresses[config.value.addresses.internal],
+        config.value.addresses.internal,
+        null
+      )
       nic_type   = config.value.nic_type
       stack_type = config.value.stack_type
       dynamic "access_config" {
         for_each = config.value.nat ? [""] : []
         content {
-          nat_ip = try(config.value.addresses.external, null)
+          nat_ip = try(
+            local.ctx.addresses[config.value.addresses.external],
+            config.value.addresses.external,
+            null
+          )
         }
       }
       dynamic "alias_ip_range" {
@@ -211,20 +239,28 @@ resource "google_compute_instance_template" "default" {
 }
 
 resource "google_compute_region_instance_template" "default" {
-  provider              = google-beta
-  count                 = local.template_create && local.template_regional ? 1 : 0
-  project               = var.project_id
-  region                = local.region
-  name_prefix           = "${var.name}-"
-  description           = var.description
-  tags                  = var.tags
-  machine_type          = var.instance_type
-  min_cpu_platform      = var.min_cpu_platform
-  can_ip_forward        = var.can_ip_forward
-  metadata              = var.metadata
-  labels                = var.labels
-  resource_manager_tags = var.tag_bindings_immutable
-
+  provider                = google-beta
+  count                   = local.template_create && local.template_regional ? 1 : 0
+  project                 = local.project_id
+  region                  = local.region
+  name_prefix             = "${var.name}-"
+  description             = var.description
+  tags                    = var.tags
+  machine_type            = var.instance_type
+  min_cpu_platform        = var.min_cpu_platform
+  can_ip_forward          = var.can_ip_forward
+  metadata                = var.metadata
+  metadata_startup_script = var.metadata_startup_script
+  labels                  = var.labels
+  resource_manager_tags   = var.tag_bindings_immutable
+  resource_policies = (
+    var.resource_policies == null && var.instance_schedule == null
+    ? null
+    : concat(
+      coalesce(var.resource_policies, []),
+      coalesce(local.ischedule, [])
+    )
+  )
   dynamic "advanced_machine_features" {
     for_each = local.advanced_mf != null ? [""] : []
     content {
@@ -250,7 +286,10 @@ resource "google_compute_region_instance_template" "default" {
     dynamic "disk_encryption_key" {
       for_each = var.encryption != null ? [""] : []
       content {
-        kms_key_self_link = var.encryption.kms_key_self_link
+        kms_key_self_link = try(
+          local.ctx.kms_keys[var.encryption.kms_key_self_link],
+          var.encryption.kms_key_self_link
+        )
       }
     }
   }
@@ -300,7 +339,10 @@ resource "google_compute_region_instance_template" "default" {
       dynamic "disk_encryption_key" {
         for_each = var.encryption != null ? [""] : []
         content {
-          kms_key_self_link = var.encryption.kms_key_self_link
+          kms_key_self_link = try(
+            local.ctx.kms_keys[var.encryption.kms_key_self_link],
+            var.encryption.kms_key_self_link
+          )
         }
       }
     }
@@ -310,15 +352,27 @@ resource "google_compute_region_instance_template" "default" {
     for_each = var.network_interfaces
     iterator = config
     content {
-      network    = config.value.network
-      subnetwork = config.value.subnetwork
-      network_ip = try(config.value.addresses.internal, null)
+      network = lookup(
+        local.ctx.networks, config.value.network, config.value.network
+      )
+      subnetwork = lookup(
+        local.ctx.subnets, config.value.subnetwork, config.value.subnetwork
+      )
+      network_ip = try(
+        local.ctx.addresses[config.value.addresses.internal],
+        config.value.addresses.internal,
+        null
+      )
       nic_type   = config.value.nic_type
       stack_type = config.value.stack_type
       dynamic "access_config" {
         for_each = config.value.nat ? [""] : []
         content {
-          nat_ip = try(config.value.addresses.external, null)
+          nat_ip = try(
+            local.ctx.addresses[config.value.addresses.external],
+            config.value.addresses.external,
+            null
+          )
         }
       }
       dynamic "alias_ip_range" {
@@ -329,13 +383,6 @@ resource "google_compute_region_instance_template" "default" {
           ip_cidr_range         = config_alias.value
         }
       }
-    }
-  }
-
-  dynamic "network_interface" {
-    for_each = var.network_attached_interfaces
-    content {
-      network_attachment = network_interface.value
     }
   }
 

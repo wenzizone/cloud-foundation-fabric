@@ -80,7 +80,7 @@ variable "attached_disks" {
 }
 
 variable "boot_disk" {
-  description = "Boot disk properties."
+  description = "Boot disk properties. Initialize params are ignored when source is set."
   type = object({
     auto_delete       = optional(bool, true)
     snapshot_schedule = optional(list(string))
@@ -97,10 +97,7 @@ variable "boot_disk" {
   }
   nullable = false
   validation {
-    condition = (
-      (var.boot_disk.source == null ? 0 : 1) +
-      (var.boot_disk.initialize_params == null ? 0 : 1) < 2
-    )
+    condition     = var.boot_disk.source != null || var.boot_disk.initialize_params != null
     error_message = "You can only have one of boot disk source or initialize params."
   }
   validation {
@@ -123,6 +120,23 @@ variable "confidential_compute" {
   description = "Enable Confidential Compute for these instances."
   type        = bool
   default     = false
+}
+
+variable "context" {
+  description = "Context-specific interpolations."
+  type = object({
+    addresses      = optional(map(string), {})
+    custom_roles   = optional(map(string), {})
+    kms_keys       = optional(map(string), {})
+    iam_principals = optional(map(string), {})
+    locations      = optional(map(string), {})
+    networks       = optional(map(string), {})
+    project_ids    = optional(map(string), {})
+    subnets        = optional(map(string), {})
+    tag_values     = optional(map(string), {})
+  })
+  default  = {}
+  nullable = false
 }
 
 variable "create_template" {
@@ -214,35 +228,24 @@ variable "iam" {
 variable "instance_schedule" {
   description = "Assign or create and assign an instance schedule policy. Either resource policy id or create_config must be specified if not null. Set active to null to dtach a policy from vm before destroying."
   type = object({
-    resource_policy_id = optional(string)
-    create_config = optional(object({
-      active          = optional(bool, true)
-      description     = optional(string)
-      expiration_time = optional(string)
-      start_time      = optional(string)
-      timezone        = optional(string, "UTC")
-      vm_start        = optional(string)
-      vm_stop         = optional(string)
-    }))
+    active          = optional(bool, true)
+    description     = optional(string)
+    expiration_time = optional(string)
+    start_time      = optional(string)
+    timezone        = optional(string, "UTC")
+    vm_start        = optional(string)
+    vm_stop         = optional(string)
   })
   default = null
   validation {
     condition = (
       var.instance_schedule == null ||
-      try(var.instance_schedule.resource_policy_id, null) != null ||
-      try(var.instance_schedule.create_config, null) != null
-    )
-    error_message = "A resource policy name or configuration must be specified when not null."
-  }
-  validation {
-    condition = (
-      try(var.instance_schedule.create_config, null) == null ||
       length(compact([
-        try(var.instance_schedule.create_config.vm_start, null),
-        try(var.instance_schedule.create_config.vm_stop, null)
+        try(var.instance_schedule.vm_start, null),
+        try(var.instance_schedule.vm_stop, null)
       ])) > 0
     )
-    error_message = "A resource policy configuration must contain at least one schedule."
+    error_message = "An instance schedule must contain at least one schedule."
   }
 }
 
@@ -262,6 +265,13 @@ variable "metadata" {
   description = "Instance metadata."
   type        = map(string)
   default     = {}
+}
+
+variable "metadata_startup_script" {
+  description = "Instance startup script. Will trigger recreation on change, even after importing."
+  type        = string
+  nullable    = true
+  default     = null
 }
 
 variable "min_cpu_platform" {
@@ -295,7 +305,12 @@ variable "network_interfaces" {
       internal = optional(string)
       external = optional(string)
     }), null)
+    network_tier = optional(string)
   }))
+  validation {
+    condition     = alltrue([for v in var.network_interfaces : contains(["STANDARD", "PREMIUM"], coalesce(v.network_tier, "PREMIUM"))])
+    error_message = "Allowed values for network tier are: 'STANDARD' or 'PREMIUM'"
+  }
 }
 
 variable "network_tag_bindings" {
@@ -370,6 +385,13 @@ variable "project_id" {
 variable "project_number" {
   description = "Project number. Used in tag bindings to avoid a permadiff."
   type        = string
+  default     = null
+}
+
+variable "resource_policies" {
+  description = "Resource policies to attach to the instance or template."
+  type        = list(string)
+  nullable    = true
   default     = null
 }
 

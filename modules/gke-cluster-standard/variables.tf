@@ -28,7 +28,8 @@ variable "access_config" {
         global_access       = optional(bool, true)
       }))
     }))
-    private_nodes = optional(bool, true)
+    master_ipv4_cidr_block = optional(string)
+    private_nodes          = optional(bool, true)
   })
   nullable = false
   default  = {}
@@ -53,6 +54,7 @@ variable "backup_configs" {
       include_volume_data               = optional(bool, true)
       labels                            = optional(map(string))
       namespaces                        = optional(list(string))
+      permissive_mode                   = optional(bool)
       schedule                          = optional(string)
       retention_policy_days             = optional(number)
       retention_policy_lock             = optional(bool, false)
@@ -237,7 +239,9 @@ variable "enable_features" {
     shielded_nodes       = optional(bool, false)
     tpu                  = optional(bool, false)
     upgrade_notifications = optional(object({
-      topic_id = optional(string)
+      enabled     = optional(bool, true)
+      event_types = optional(list(string), [])
+      topic_id    = optional(string)
     }))
     vertical_pod_autoscaling = optional(bool, false)
     workload_identity        = optional(bool, true)
@@ -250,6 +254,22 @@ variable "enable_features" {
     )
     error_message = "FQDN network policy is only supported for clusters with Dataplane v2."
   }
+  validation {
+    condition = alltrue([
+      for e in try(var.enable_features.upgrade_notifications.event_types, []) :
+      contains([
+        "UPGRADE_AVAILABLE_EVENT", "UPGRADE_EVENT",
+        "SECURITY_BULLETIN_EVENT", "UPGRADE_INFO_EVENT"
+      ], e)
+    ])
+    error_message = "Invalid upgrade notification event type."
+  }
+}
+
+variable "fleet_project" {
+  description = "The name of the fleet host project where this cluster will be registered."
+  type        = string
+  default     = null
 }
 
 variable "issue_client_certificate" {
@@ -395,6 +415,7 @@ variable "node_config" {
     tags                          = optional(list(string))
     workload_metadata_config_mode = optional(string)
     kubelet_readonly_port_enabled = optional(bool, true)
+    resource_manager_tags         = optional(map(string), {})
   })
   default  = {}
   nullable = false
@@ -412,6 +433,23 @@ variable "node_locations" {
   type        = list(string)
   default     = []
   nullable    = false
+}
+
+variable "node_pool_auto_config" {
+  description = "Node pool configs that apply to auto-provisioned node pools in autopilot clusters and node auto-provisioning-enabled clusters."
+  type = object({
+    cgroup_mode                   = optional(string)
+    kubelet_readonly_port_enabled = optional(bool, true)
+    network_tags                  = optional(list(string), [])
+    resource_manager_tags         = optional(map(string), {})
+  })
+  default  = {}
+  nullable = false
+  validation {
+    condition = contains(["CGROUPMODE_UNSPECIFIED", "CGROUPMODE_V1", "CGROUPMODE_V2"],
+    coalesce(var.node_pool_auto_config.cgroup_mode, "CGROUPMODE_UNSPECIFIED"))
+    error_message = "node_pool_auto_config.cgroup_mode must be CGROUPMODE_UNSPECIFIED, CGROUPMODE_V1 or CGROUPMODE_V2"
+  }
 }
 
 variable "project_id" {

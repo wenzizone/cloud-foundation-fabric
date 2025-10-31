@@ -14,11 +14,13 @@ Cloud Run Services and Jobs, with support for IAM roles and Eventarc trigger cre
 - [Eventarc triggers](#eventarc-triggers)
   - [PubSub](#pubsub)
   - [Audit logs](#audit-logs)
-  - [Using custom service accounts for triggers](#using-custom-service-accounts-for-triggers)
+  - [GCS bucket](#gcs-bucket)
 - [Cloud Run Invoker IAM Disable](#cloud-run-invoker-iam-disable)
 - [Cloud Run Service Account](#cloud-run-service-account)
 - [Creating Cloud Run Jobs](#creating-cloud-run-jobs)
 - [Tag bindings](#tag-bindings)
+- [IAP Configuration](#iap-configuration)
+- [Adding GPUs](#adding-gpus)
 - [Variables](#variables)
 - [Outputs](#outputs)
 - [Fixtures](#fixtures)
@@ -32,7 +34,7 @@ IAM bindings support the usual syntax. Container environment values can be decla
 module "cloud_run" {
   source     = "./fabric/modules/cloud-run-v2"
   project_id = var.project_id
-  name       = "hello"
+  name       = "example-hello"
   region     = var.region
   containers = {
     hello = {
@@ -44,7 +46,7 @@ module "cloud_run" {
       env_from_key = {
         SECRET1 = {
           secret  = module.secret-manager.secrets["credentials"].name
-          version = module.secret-manager.version_versions["credentials:v1"]
+          version = module.secret-manager.version_versions["credentials/v1"]
         }
       }
     }
@@ -54,7 +56,7 @@ module "cloud_run" {
   }
   deletion_protection = false
 }
-# tftest modules=2 resources=5 fixtures=fixtures/secret-credentials.tf inventory=service-iam-env.yaml e2e
+# tftest fixtures=fixtures/secret-credentials.tf inventory=service-iam-env.yaml e2e skip-tofu
 ```
 
 ## Mounting secrets as volumes
@@ -63,7 +65,7 @@ module "cloud_run" {
 module "cloud_run" {
   source     = "./fabric/modules/cloud-run-v2"
   project_id = var.project_id
-  name       = "hello"
+  name       = "example-hello"
   region     = var.region
   containers = {
     hello = {
@@ -84,7 +86,7 @@ module "cloud_run" {
   }
   deletion_protection = false
 }
-# tftest modules=2 resources=4 fixtures=fixtures/secret-credentials.tf inventory=service-volume-secretes.yaml e2e
+# tftest fixtures=fixtures/secret-credentials.tf inventory=service-volume-secretes.yaml e2e skip-tofu
 ```
 
 ## Mounting GCS buckets
@@ -93,7 +95,7 @@ module "cloud_run" {
 module "cloud_run" {
   source     = "./fabric/modules/cloud-run-v2"
   project_id = var.project_id
-  name       = "hello"
+  name       = "example-hello"
   region     = var.region
   containers = {
     hello = {
@@ -103,7 +105,7 @@ module "cloud_run" {
       }
     }
   }
-  revision = {
+  service_config = {
     gen2_execution_environment = true
   }
   volumes = {
@@ -130,7 +132,7 @@ module "cloud_run" {
   source     = "./fabric/modules/cloud-run-v2"
   project_id = var.project_id
   region     = var.region
-  name       = "hello"
+  name       = "example-hello"
   containers = {
     hello = {
       image = "us-docker.pkg.dev/cloudrun/container/hello"
@@ -155,7 +157,7 @@ module "cloud_run" {
 module "cloud_run" {
   source     = "./fabric/modules/cloud-run-v2"
   project_id = var.project_id
-  name       = "hello"
+  name       = "example-hello"
   region     = var.region
   containers = {
     hello = {
@@ -163,18 +165,20 @@ module "cloud_run" {
     }
   }
   revision = {
-    gen2_execution_environment = true
-    max_instance_count         = 20
     vpc_access = {
       egress = "ALL_TRAFFIC"
       subnet = var.subnet.name
       tags   = ["tag1", "tag2", "tag3"]
     }
   }
+  service_config = {
+    gen2_execution_environment = true
+    max_instance_count         = 20
+  }
   deletion_protection = false
 }
 # E2E test disabled due to b/332419038
-# tftest modules=1 resources=1 inventory=service-direct-vpc.yaml
+# tftest inventory=service-direct-vpc.yaml
 ```
 
 ## VPC Access Connector
@@ -185,14 +189,14 @@ You can use an existing [VPC Access Connector](https://cloud.google.com/vpc/docs
 module "cloud_run" {
   source     = "./fabric/modules/cloud-run-v2"
   project_id = var.project_id
-  region     = var.region
-  name       = "hello"
+  region     = var.regions.secondary
+  name       = "example-hello"
   containers = {
     hello = {
       image = "us-docker.pkg.dev/cloudrun/container/hello"
     }
   }
-  revision = {
+  service_config = {
     vpc_access = {
       connector = google_vpc_access_connector.connector.id
       egress    = "ALL_TRAFFIC"
@@ -200,17 +204,17 @@ module "cloud_run" {
   }
   deletion_protection = false
 }
-# tftest modules=1 resources=2 fixtures=fixtures/vpc-connector.tf inventory=service-vpc-access-connector.yaml e2e
+# tftest fixtures=fixtures/vpc-connector.tf inventory=service-vpc-access-connector.yaml e2e
 ```
 
-If creation of the VPC Access Connector is required, use the `vpc_connector_create` variable which also supports optional attributes like number of instances, machine type, or throughput. The connector will be used automatically.
+If creation of the VPC Access Connector is required, use the `vpc_connector_create` variable which also supports optional attributes like number of instances, machine type, or throughput. The connector will be used automatically by Cloud Run Service and Job. Worker Pool does not support connector.
 
 ```hcl
 module "cloud_run" {
   source     = "./fabric/modules/cloud-run-v2"
   project_id = var.project_id
   region     = var.region
-  name       = "hello"
+  name       = "example-hello"
   containers = {
     hello = {
       image = "us-docker.pkg.dev/cloudrun/container/hello"
@@ -226,7 +230,7 @@ module "cloud_run" {
   }
   deletion_protection = false
 }
-# tftest modules=1 resources=2 inventory=service-vpc-access-connector-create.yaml e2e
+# tftest inventory=service-vpc-access-connector-create.yaml e2e
 ```
 
 Note that if you are using a Shared VPC for the connector, you need to specify a subnet and the host project if this is not where the Cloud Run service is deployed.
@@ -236,7 +240,7 @@ module "cloud_run" {
   source     = "./fabric/modules/cloud-run-v2"
   project_id = module.project-service.project_id
   region     = var.region
-  name       = "hello"
+  name       = "example-hello"
   containers = {
     hello = {
       image = "us-docker.pkg.dev/cloudrun/container/hello"
@@ -255,7 +259,7 @@ module "cloud_run" {
   }
   deletion_protection = false
 }
-# tftest modules=4 resources=59 fixtures=fixtures/shared-vpc.tf inventory=service-vpc-access-connector-create-sharedvpc.yaml e2e
+# tftest fixtures=fixtures/shared-vpc.tf inventory=service-vpc-access-connector-create-sharedvpc.yaml e2e
 ```
 
 ## Using Customer-Managed Encryption Key
@@ -297,7 +301,7 @@ module "cloud_run" {
   source         = "./fabric/modules/cloud-run-v2"
   project_id     = module.project.project_id
   region         = var.region
-  name           = "hello"
+  name           = "example-hello"
   encryption_key = module.kms.keys.key-regional.id
   containers = {
     hello = {
@@ -306,7 +310,7 @@ module "cloud_run" {
   }
   deletion_protection = false
 }
-# tftest modules=3 resources=11 e2e
+# tftest inventory=cmek.yaml e2e
 ```
 
 ## Deploying OpenTelemetry Collector sidecar
@@ -487,27 +491,25 @@ module "secrets" {
   source     = "./fabric/modules/secret-manager"
   project_id = var.project_id
   secrets = {
-    otel-config = {}
-  }
-  iam = {
     otel-config = {
-      "roles/secretmanager.secretAccessor" = [
-        "serviceAccount:${var.project_number}-compute@developer.gserviceaccount.com",
-      ]
-    }
-  }
-  versions = {
-    otel-config = {
-      v1 = { enabled = true, data = file("${path.module}/config/otel-config.yaml") }
+      iam = {
+        "roles/secretmanager.secretAccessor" = [
+          "serviceAccount:${var.project_number}-compute@developer.gserviceaccount.com"
+        ]
+      }
+      versions = {
+        v1 = {
+          data = file("${path.module}/config/otel-config.yaml")
+        }
+      }
     }
   }
 }
-
 module "cloud_run" {
   source     = "./fabric/modules/cloud-run-v2"
   project_id = var.project_id
   region     = var.region
-  name       = "hello"
+  name       = "example-hello"
   containers = {
     hello = {
       image = "us-docker.pkg.dev/cloudrun/container/hello"
@@ -552,7 +554,7 @@ module "cloud_run" {
   }
   deletion_protection = false
 }
-# tftest modules=2 resources=4 files=otel-config inventory=service-otel-sidecar.yaml e2e
+# tftest files=otel-config inventory=service-otel-sidecar.yaml e2e skip-tofu
 ```
 
 ## Eventarc triggers
@@ -566,20 +568,22 @@ module "cloud_run" {
   source     = "./fabric/modules/cloud-run-v2"
   project_id = var.project_id
   region     = var.region
-  name       = "hello"
+  name       = "example-hello"
   containers = {
     hello = {
       image = "us-docker.pkg.dev/cloudrun/container/hello"
     }
   }
-  eventarc_triggers = {
-    pubsub = {
-      topic-1 = module.pubsub.topic.name
+  service_config = {
+    eventarc_triggers = {
+      pubsub = {
+        topic-1 = module.pubsub.topic.name
+      }
     }
   }
   deletion_protection = false
 }
-# tftest modules=2 resources=4 fixtures=fixtures/pubsub.tf inventory=service-eventarc-pubsub.yaml e2e
+# tftest fixtures=fixtures/pubsub.tf inventory=service-eventarc-pubsub.yaml e2e
 ```
 
 ### Audit logs
@@ -591,78 +595,84 @@ module "cloud_run" {
   source     = "./fabric/modules/cloud-run-v2"
   project_id = var.project_id
   region     = var.region
-  name       = "hello"
+  name       = "example-hello"
   containers = {
     hello = {
       image = "us-docker.pkg.dev/cloudrun/container/hello"
     }
   }
-  eventarc_triggers = {
-    audit_log = {
-      setiampolicy = {
-        method  = "SetIamPolicy"
-        service = "cloudresourcemanager.googleapis.com"
+  service_config = {
+    eventarc_triggers = {
+      audit_log = {
+        setiampolicy = {
+          method  = "SetIamPolicy"
+          service = "cloudresourcemanager.googleapis.com"
+        }
       }
+      service_account_email = module.iam-service-account.email
     }
-    service_account_create = true
+  }
+  iam = {
+    "roles/run.invoker" = [module.iam-service-account.iam_email]
   }
   deletion_protection = false
+  depends_on          = [google_project_iam_member.eventarc_receiver]
 }
-# tftest modules=1 resources=4 inventory=service-eventarc-auditlogs-sa-create.yaml
+
+resource "google_project_iam_member" "eventarc_receiver" {
+  project = var.project_id
+  role    = "roles/eventarc.eventReceiver"
+  member  = module.iam-service-account.iam_email
+}
+# tftest fixtures=fixtures/iam-service-account.tf inventory=service-eventarc-auditlogs-external-sa.yaml e2e
 ```
 
-### Using custom service accounts for triggers
+### GCS bucket
 
-By default `Compute default service account` is used to trigger Cloud Run. If you want to use custom Service Accounts you can either provide your own in `eventarc_triggers.service_account_email` or set `eventarc_triggers.service_account_create` to true and service account named `tf-cr-trigger-${var.name}` will be created with `roles/run.invoker` granted on this Cloud Run service.
-
-Example using provided service account:
+This deploys a Cloud Run service that will be triggered when files are uploaded to a GCS bucket.
 
 ```hcl
 module "cloud_run" {
   source     = "./fabric/modules/cloud-run-v2"
   project_id = var.project_id
   region     = var.region
-  name       = "hello"
+  name       = "example-hello"
   containers = {
     hello = {
       image = "us-docker.pkg.dev/cloudrun/container/hello"
     }
   }
-  eventarc_triggers = {
-    audit_log = {
-      setiampolicy = {
-        method  = "SetIamPolicy"
-        service = "cloudresourcemanager.googleapis.com"
+  service_config = {
+    eventarc_triggers = {
+      storage = {
+        bucket-upload = {
+          bucket = module.gcs.name
+          path   = "/webhook" # optional: URL path for the Cloud Run service
+        }
       }
+      service_account_email = module.iam-service-account.email
     }
-    service_account_email = "cloud-run-trigger@my-project.iam.gserviceaccount.com"
-  }
-}
-# tftest modules=1 resources=2 inventory=service-eventarc-auditlogs-external-sa.yaml
-```
-
-Example using automatically created service account:
-
-```hcl
-module "cloud_run" {
-  source     = "./fabric/modules/cloud-run-v2"
-  project_id = var.project_id
-  region     = var.region
-  name       = "hello"
-  containers = {
-    hello = {
-      image = "us-docker.pkg.dev/cloudrun/container/hello"
-    }
-  }
-  eventarc_triggers = {
-    pubsub = {
-      topic-1 = module.pubsub.topic.name
-    }
-    service_account_create = true
   }
   deletion_protection = false
+  depends_on = [
+    google_project_iam_member.gcs_pubsb_publisher,
+    google_project_iam_member.trigger_sa_event_receiver,
+  ]
 }
-# tftest modules=2 resources=6 fixtures=fixtures/pubsub.tf inventory=service-eventarc-pubsub-sa-create.yaml e2e
+
+resource "google_project_iam_member" "trigger_sa_event_receiver" {
+  member  = module.iam-service-account.iam_email
+  project = var.project_id
+  role    = "roles/eventarc.eventReceiver"
+}
+
+resource "google_project_iam_member" "gcs_pubsb_publisher" {
+  member  = "serviceAccount:service-${var.project_number}@gs-project-accounts.iam.gserviceaccount.com"
+  project = var.project_id
+  role    = "roles/pubsub.publisher"
+}
+
+# tftest fixtures=fixtures/gcs.tf,fixtures/iam-service-account.tf inventory=service-eventarc-storage.yaml e2e
 ```
 
 ## Cloud Run Invoker IAM Disable
@@ -674,61 +684,75 @@ module "cloud_run" {
   source     = "./fabric/modules/cloud-run-v2"
   project_id = var.project_id
   region     = var.region
-  name       = "hello"
+  name       = "example-hello"
   containers = {
     hello = {
       image = "us-docker.pkg.dev/cloudrun/container/hello"
     }
   }
-  invoker_iam_disabled = true
-  deletion_protection  = false
+  service_config = {
+    invoker_iam_disabled = true
+  }
+  deletion_protection = false
 }
-# tftest modules=1 resources=1 inventory=service-invoker-iam-disable.yaml e2e
+# tftest inventory=service-invoker-iam-disable.yaml e2e
 ```
 
 ## Cloud Run Service Account
 
-To use a custom service account managed by the module, set `service_account_create` to `true` and leave `service_account` set to `null` (default).
+The module by default creates a service account that is associated with the Cloud Run instance. It grants the service account `roles/logging.logWriter` and `roles/monitoring.metricWriter` roles.
+
+To assign non-default roles, pass them as `service_account_config.roles`.
 
 ```hcl
 module "cloud_run" {
   source     = "./fabric/modules/cloud-run-v2"
   project_id = var.project_id
   region     = var.region
-  name       = "hello"
+  name       = "example-hello"
   containers = {
     hello = {
       image = "us-docker.pkg.dev/cloudrun/container/hello"
     }
   }
-  service_account_create = true
-  deletion_protection    = false
-}
-# tftest modules=1 resources=2 inventory=service-sa-create.yaml e2e
-```
-
-To use an externally managed service account, use its email in `service_account` and leave `service_account_create` to `false` (default).
-
-```hcl
-module "cloud_run" {
-  source     = "./fabric/modules/cloud-run-v2"
-  project_id = var.project_id
-  region     = var.region
-  name       = "hello"
-  containers = {
-    hello = {
-      image = "us-docker.pkg.dev/cloudrun/container/hello"
-    }
+  service_account_config = {
+    roles = [
+      "roles/logging.logWriter",
+      "roles/monitoring.metricWriter",
+      "roles/cloudsql.client",
+      "roles/cloudsql.instanceUser",
+    ]
   }
-  service_account     = module.iam-service-account.email
   deletion_protection = false
 }
-# tftest modules=2 resources=2 fixtures=fixtures/iam-service-account.tf inventory=service-external-sa.yaml e2e
+# tftest inventory=service-sa-create.yaml e2e
+```
+
+To use externally managed service account, pass its email in `service_account_config.email` and set `service_account_config.email` to `false`.
+
+```hcl
+module "cloud_run" {
+  source     = "./fabric/modules/cloud-run-v2"
+  project_id = var.project_id
+  region     = var.region
+  name       = "example-hello"
+  containers = {
+    hello = {
+      image = "us-docker.pkg.dev/cloudrun/container/hello"
+    }
+  }
+  service_account_config = {
+    create = false
+    email  = module.iam-service-account.email
+  }
+  deletion_protection = false
+}
+# tftest fixtures=fixtures/iam-service-account.tf inventory=service-external-sa.yaml e2e
 ```
 
 ## Creating Cloud Run Jobs
 
-To create a job instead of service set `create_job` to `true`. Jobs support all functions above apart from triggers.
+To create a job instead of service set `type` to `JOB`. Jobs support all functions above apart from triggers.
 
 Unsupported variables / attributes:
 
@@ -740,13 +764,19 @@ Unsupported variables / attributes:
 - containers.resources.cpu_idle
 - containers.resources.startup_cpu_boost
 
+Additional configuration can be passwed as `job_config`:
+
+- max_retries - maximum of retries per task
+- task_count - desired number of tasks
+- timeout - max allowed time per task, in seconds with up to nine fractional digits, ending with 's'. Example: `3.5s`
+
 ```hcl
 module "cloud_run" {
   source     = "./fabric/modules/cloud-run-v2"
   project_id = var.project_id
-  name       = "hello"
+  name       = "example-hello"
   region     = var.region
-  create_job = true
+  type       = "JOB"
   containers = {
     hello = {
       image = "us-docker.pkg.dev/cloudrun/container/hello"
@@ -762,19 +792,26 @@ module "cloud_run" {
   deletion_protection = false
 }
 
-# tftest modules=1 resources=2 inventory=job-iam-env.yaml e2e
+# tftest inventory=job-iam-env.yaml e2e
 ```
 
 ## Tag bindings
 
-Tag bindings are not yet supported for jobs. Refer to the [Creating and managing tags](https://cloud.google.com/resource-manager/docs/tags/tags-creating-and-managing) documentation for details on usage.
+Tag bindings are not yet supported for Worker Pool. Refer to the [Creating and managing tags](https://cloud.google.com/resource-manager/docs/tags/tags-creating-and-managing) documentation for details on usage.
 
 ```hcl
-module "org" {
-  source          = "./fabric/modules/organization"
-  organization_id = var.organization_id
+module "project" {
+  source = "./fabric/modules/project"
+  name   = var.project_id
+  project_reuse = {
+    use_data_source = false
+    attributes = {
+      name   = var.project_id
+      number = var.project_number
+    }
+  }
   tags = {
-    environment = {
+    run_environment = {
       description = "Environment specification."
       values = {
         dev     = {}
@@ -785,56 +822,190 @@ module "org" {
   }
 }
 
-module "cloud_run" {
+module "cloud_run_service" {
   source     = "./fabric/modules/cloud-run-v2"
   project_id = var.project_id
-  name       = "hello"
+  name       = "hello-service"
   region     = var.region
   containers = {
     hello = {
       image = "us-docker.pkg.dev/cloudrun/container/hello"
-      env = {
-        VAR1 = "VALUE1"
-        VAR2 = "VALUE2"
+    }
+  }
+  tag_bindings = {
+    env-sandbox = module.project.tag_values["run_environment/sandbox"].id
+  }
+  deletion_protection = false
+}
+
+module "cloud_run_job" {
+  source     = "./fabric/modules/cloud-run-v2"
+  project_id = var.project_id
+  name       = "hello-job"
+  region     = var.region
+  type       = "JOB"
+  containers = {
+    hello = {
+      image = "us-docker.pkg.dev/cloudrun/container/hello"
+    }
+  }
+  tag_bindings = {
+    env-sandbox = module.project.tag_values["run_environment/sandbox"].id
+  }
+  deletion_protection = false
+}
+
+# tftest inventory=tags.yaml e2e
+```
+
+## IAP Configuration
+
+IAP is only supported for service. Refer to the [Configure IAP directly on cloud run](https://cloud.google.com/run/docs/securing/identity-aware-proxy-cloud-run) documentation for details on usage.
+
+```hcl
+module "cloud_run" {
+  source       = "./fabric/modules/cloud-run-v2"
+  project_id   = var.project_id
+  name         = "example-hello"
+  region       = var.region
+  launch_stage = "BETA"
+  containers = {
+    hello = {
+      image = "us-docker.pkg.dev/cloudrun/container/hello"
+    }
+  }
+  service_config = {
+    iap_config = {
+      iam = ["group:${var.group_email}"]
+    }
+  }
+  deletion_protection = false
+}
+# tftest inventory=iap.yaml e2e
+```
+
+## Adding GPUs
+
+GPU support is available for all types of Cloud Run resources: jobs, services and worker pools.
+
+```hcl
+module "job" {
+  source       = "./fabric/modules/cloud-run-v2"
+  project_id   = var.project_id
+  name         = "example-job"
+  region       = var.region
+  launch_stage = "BETA"
+  revision = {
+    gpu_zonal_redundancy_disabled = true
+    node_selector = {
+      accelerator = "nvidia-l4"
+    }
+  }
+  type = "JOB"
+  containers = {
+    hello = {
+      image = "us-docker.pkg.dev/cloudrun/container/hello"
+      resources = {
+        limits = {
+          cpu              = "4000m"
+          memory           = "16Gi"
+          "nvidia.com/gpu" = "1"
+        }
       }
     }
   }
-  iam = {
-    "roles/run.invoker" = ["allUsers"]
-  }
-  tag_bindings = {
-    env-sandbox = module.org.tag_values["environment/sandbox"].id
-  }
+  deletion_protection = false
 }
-# tftest modules=2 resources=7
+# tftest inventory=gpu-job.yaml
+```
+
+```hcl
+module "service" {
+  source     = "./fabric/modules/cloud-run-v2"
+  project_id = var.project_id
+  name       = "service"
+  region     = var.region
+  revision = {
+    gpu_zonal_redundancy_disabled = true
+    node_selector = {
+      accelerator = "nvidia-l4"
+    }
+  }
+  service_config = {
+    gen2_execution_environment = true
+  }
+  containers = {
+    hello = {
+      image = "us-docker.pkg.dev/cloudrun/container/hello"
+      resources = {
+        limits = {
+          cpu              = "4000m"
+          memory           = "16Gi"
+          "nvidia.com/gpu" = "1"
+        }
+      }
+    }
+  }
+  deletion_protection = false
+}
+# tftest inventory=gpu-service.yaml e2e
+```
+
+```hcl
+module "worker" {
+  source       = "./fabric/modules/cloud-run-v2"
+  project_id   = var.project_id
+  name         = "worker"
+  region       = var.region
+  launch_stage = "BETA"
+  revision = {
+    gpu_zonal_redundancy_disabled = true
+    node_selector = {
+      accelerator = "nvidia-l4"
+    }
+  }
+  type = "WORKERPOOL"
+  containers = {
+    hello = {
+      image = "us-docker.pkg.dev/cloudrun/container/hello"
+      resources = {
+        limits = {
+          cpu              = "4000m"
+          memory           = "16Gi"
+          "nvidia.com/gpu" = "1"
+        }
+      }
+    }
+  }
+  deletion_protection = false
+}
+# tftest inventory=gpu-workerpool.yaml e2e
 ```
 <!-- BEGIN TFDOC -->
 ## Variables
 
 | name | description | type | required | default |
 |---|---|:---:|:---:|:---:|
-| [name](variables.tf#L181) | Name used for Cloud Run service. | <code>string</code> | ✓ |  |
-| [project_id](variables.tf#L196) | Project id used for all resources. | <code>string</code> | ✓ |  |
-| [region](variables.tf#L201) | Region used for all resources. | <code>string</code> | ✓ |  |
-| [containers](variables.tf#L17) | Containers in name => attributes format. | <code title="map&#40;object&#40;&#123;&#10;  image      &#61; string&#10;  depends_on &#61; optional&#40;list&#40;string&#41;&#41;&#10;  command    &#61; optional&#40;list&#40;string&#41;&#41;&#10;  args       &#61; optional&#40;list&#40;string&#41;&#41;&#10;  env        &#61; optional&#40;map&#40;string&#41;&#41;&#10;  env_from_key &#61; optional&#40;map&#40;object&#40;&#123;&#10;    secret  &#61; string&#10;    version &#61; string&#10;  &#125;&#41;&#41;&#41;&#10;  liveness_probe &#61; optional&#40;object&#40;&#123;&#10;    grpc &#61; optional&#40;object&#40;&#123;&#10;      port    &#61; optional&#40;number&#41;&#10;      service &#61; optional&#40;string&#41;&#10;    &#125;&#41;&#41;&#10;    http_get &#61; optional&#40;object&#40;&#123;&#10;      http_headers &#61; optional&#40;map&#40;string&#41;&#41;&#10;      path         &#61; optional&#40;string&#41;&#10;      port         &#61; optional&#40;number&#41;&#10;    &#125;&#41;&#41;&#10;    failure_threshold     &#61; optional&#40;number&#41;&#10;    initial_delay_seconds &#61; optional&#40;number&#41;&#10;    period_seconds        &#61; optional&#40;number&#41;&#10;    timeout_seconds       &#61; optional&#40;number&#41;&#10;  &#125;&#41;&#41;&#10;  ports &#61; optional&#40;map&#40;object&#40;&#123;&#10;    container_port &#61; optional&#40;number&#41;&#10;    name           &#61; optional&#40;string&#41;&#10;  &#125;&#41;&#41;&#41;&#10;  resources &#61; optional&#40;object&#40;&#123;&#10;    limits &#61; optional&#40;object&#40;&#123;&#10;      cpu    &#61; string&#10;      memory &#61; string&#10;    &#125;&#41;&#41;&#10;    cpu_idle          &#61; optional&#40;bool&#41;&#10;    startup_cpu_boost &#61; optional&#40;bool&#41;&#10;  &#125;&#41;&#41;&#10;  startup_probe &#61; optional&#40;object&#40;&#123;&#10;    grpc &#61; optional&#40;object&#40;&#123;&#10;      port    &#61; optional&#40;number&#41;&#10;      service &#61; optional&#40;string&#41;&#10;    &#125;&#41;&#41;&#10;    http_get &#61; optional&#40;object&#40;&#123;&#10;      http_headers &#61; optional&#40;map&#40;string&#41;&#41;&#10;      path         &#61; optional&#40;string&#41;&#10;      port         &#61; optional&#40;number&#41;&#10;    &#125;&#41;&#41;&#10;    tcp_socket &#61; optional&#40;object&#40;&#123;&#10;      port &#61; optional&#40;number&#41;&#10;    &#125;&#41;&#41;&#10;    failure_threshold     &#61; optional&#40;number&#41;&#10;    initial_delay_seconds &#61; optional&#40;number&#41;&#10;    period_seconds        &#61; optional&#40;number&#41;&#10;    timeout_seconds       &#61; optional&#40;number&#41;&#10;  &#125;&#41;&#41;&#10;  volume_mounts &#61; optional&#40;map&#40;string&#41;&#41;&#10;&#125;&#41;&#41;">map&#40;object&#40;&#123;&#8230;&#125;&#41;&#41;</code> |  | <code>&#123;&#125;</code> |
-| [create_job](variables.tf#L80) | Create Cloud Run Job instead of Service. | <code>bool</code> |  | <code>false</code> |
-| [custom_audiences](variables.tf#L86) | Custom audiences for service. | <code>list&#40;string&#41;</code> |  | <code>null</code> |
-| [deletion_protection](variables.tf#L92) | Deletion protection setting for this Cloud Run service. | <code>string</code> |  | <code>null</code> |
-| [encryption_key](variables.tf#L98) | The full resource name of the Cloud KMS CryptoKey. | <code>string</code> |  | <code>null</code> |
-| [eventarc_triggers](variables.tf#L104) | Event arc triggers for different sources. | <code title="object&#40;&#123;&#10;  audit_log &#61; optional&#40;map&#40;object&#40;&#123;&#10;    method  &#61; string&#10;    service &#61; string&#10;  &#125;&#41;&#41;&#41;&#10;  pubsub                 &#61; optional&#40;map&#40;string&#41;&#41;&#10;  service_account_email  &#61; optional&#40;string&#41;&#10;  service_account_create &#61; optional&#40;bool, false&#41;&#10;&#125;&#41;">object&#40;&#123;&#8230;&#125;&#41;</code> |  | <code>&#123;&#125;</code> |
-| [iam](variables.tf#L122) | IAM bindings for Cloud Run service in {ROLE => [MEMBERS]} format. | <code>map&#40;list&#40;string&#41;&#41;</code> |  | <code>&#123;&#125;</code> |
-| [ingress](variables.tf#L128) | Ingress settings. | <code>string</code> |  | <code>null</code> |
-| [invoker_iam_disabled](variables.tf#L145) | Disables IAM permission check for run.routes.invoke for callers of this service. | <code>bool</code> |  | <code>false</code> |
-| [labels](variables.tf#L151) | Resource labels. | <code>map&#40;string&#41;</code> |  | <code>&#123;&#125;</code> |
-| [launch_stage](variables.tf#L157) | The launch stage as defined by Google Cloud Platform Launch Stages. | <code>string</code> |  | <code>null</code> |
-| [managed_revision](variables.tf#L174) | Whether the Terraform module should control the deployment of revisions. | <code>bool</code> |  | <code>true</code> |
-| [prefix](variables.tf#L186) | Optional prefix used for resource names. | <code>string</code> |  | <code>null</code> |
-| [revision](variables.tf#L206) | Revision template configurations. | <code title="object&#40;&#123;&#10;  labels                     &#61; optional&#40;map&#40;string&#41;&#41;&#10;  name                       &#61; optional&#40;string&#41;&#10;  gen2_execution_environment &#61; optional&#40;bool&#41;&#10;  max_concurrency            &#61; optional&#40;number&#41;&#10;  max_instance_count         &#61; optional&#40;number&#41;&#10;  min_instance_count         &#61; optional&#40;number&#41;&#10;  job &#61; optional&#40;object&#40;&#123;&#10;    max_retries &#61; optional&#40;number&#41;&#10;    task_count  &#61; optional&#40;number&#41;&#10;  &#125;&#41;, &#123;&#125;&#41;&#10;  vpc_access &#61; optional&#40;object&#40;&#123;&#10;    connector &#61; optional&#40;string&#41;&#10;    egress    &#61; optional&#40;string&#41;&#10;    network   &#61; optional&#40;string&#41;&#10;    subnet    &#61; optional&#40;string&#41;&#10;    tags      &#61; optional&#40;list&#40;string&#41;&#41;&#10;  &#125;&#41;, &#123;&#125;&#41;&#10;  timeout &#61; optional&#40;string&#41;&#10;&#125;&#41;">object&#40;&#123;&#8230;&#125;&#41;</code> |  | <code>&#123;&#125;</code> |
-| [service_account](variables.tf#L245) | Service account email. Unused if service account is auto-created. | <code>string</code> |  | <code>null</code> |
-| [service_account_create](variables.tf#L251) | Auto-create service account. | <code>bool</code> |  | <code>false</code> |
-| [tag_bindings](variables.tf#L257) | Tag bindings for this service, in key => tag value id format. | <code>map&#40;string&#41;</code> |  | <code>&#123;&#125;</code> |
-| [volumes](variables.tf#L264) | Named volumes in containers in name => attributes format. | <code title="map&#40;object&#40;&#123;&#10;  secret &#61; optional&#40;object&#40;&#123;&#10;    name         &#61; string&#10;    default_mode &#61; optional&#40;string&#41;&#10;    path         &#61; optional&#40;string&#41;&#10;    version      &#61; optional&#40;string&#41;&#10;    mode         &#61; optional&#40;string&#41;&#10;  &#125;&#41;&#41;&#10;  cloud_sql_instances &#61; optional&#40;list&#40;string&#41;&#41;&#10;  empty_dir_size      &#61; optional&#40;string&#41;&#10;  gcs &#61; optional&#40;object&#40;&#123;&#10;    bucket       &#61; string&#10;    is_read_only &#61; optional&#40;bool&#41;&#10;  &#125;&#41;&#41;&#10;  nfs &#61; optional&#40;object&#40;&#123;&#10;    server       &#61; string&#10;    path         &#61; optional&#40;string&#41;&#10;    is_read_only &#61; optional&#40;bool&#41;&#10;  &#125;&#41;&#41;&#10;&#125;&#41;&#41;">map&#40;object&#40;&#123;&#8230;&#125;&#41;&#41;</code> |  | <code>&#123;&#125;</code> |
-| [vpc_connector_create](variables-vpcconnector.tf#L17) | Populate this to create a Serverless VPC Access connector. | <code title="object&#40;&#123;&#10;  ip_cidr_range &#61; optional&#40;string&#41;&#10;  machine_type  &#61; optional&#40;string&#41;&#10;  name          &#61; optional&#40;string&#41;&#10;  network       &#61; optional&#40;string&#41;&#10;  instances &#61; optional&#40;object&#40;&#123;&#10;    max &#61; optional&#40;number&#41;&#10;    min &#61; optional&#40;number&#41;&#10;    &#125;&#41;, &#123;&#125;&#10;  &#41;&#10;  throughput &#61; optional&#40;object&#40;&#123;&#10;    max &#61; optional&#40;number&#41;&#10;    min &#61; optional&#40;number&#41;&#10;    &#125;&#41;, &#123;&#125;&#10;  &#41;&#10;  subnet &#61; optional&#40;object&#40;&#123;&#10;    name       &#61; optional&#40;string&#41;&#10;    project_id &#61; optional&#40;string&#41;&#10;  &#125;&#41;, &#123;&#125;&#41;&#10;&#125;&#41;">object&#40;&#123;&#8230;&#125;&#41;</code> |  | <code>null</code> |
+| [name](variables.tf#L178) | Name used for Cloud Run service. | <code>string</code> | ✓ |  |
+| [project_id](variables.tf#L183) | Project id used for all resources. | <code>string</code> | ✓ |  |
+| [region](variables.tf#L188) | Region used for all resources. | <code>string</code> | ✓ |  |
+| [containers](variables.tf#L17) | Containers in name => attributes format. | <code title="map&#40;object&#40;&#123;&#10;  image      &#61; string&#10;  depends_on &#61; optional&#40;list&#40;string&#41;&#41;&#10;  command    &#61; optional&#40;list&#40;string&#41;&#41;&#10;  args       &#61; optional&#40;list&#40;string&#41;&#41;&#10;  env        &#61; optional&#40;map&#40;string&#41;&#41;&#10;  env_from_key &#61; optional&#40;map&#40;object&#40;&#123;&#10;    secret  &#61; string&#10;    version &#61; string&#10;  &#125;&#41;&#41;&#41;&#10;  liveness_probe &#61; optional&#40;object&#40;&#123;&#10;    grpc &#61; optional&#40;object&#40;&#123;&#10;      port    &#61; optional&#40;number&#41;&#10;      service &#61; optional&#40;string&#41;&#10;    &#125;&#41;&#41;&#10;    http_get &#61; optional&#40;object&#40;&#123;&#10;      http_headers &#61; optional&#40;map&#40;string&#41;&#41;&#10;      path         &#61; optional&#40;string&#41;&#10;      port         &#61; optional&#40;number&#41;&#10;    &#125;&#41;&#41;&#10;    failure_threshold     &#61; optional&#40;number&#41;&#10;    initial_delay_seconds &#61; optional&#40;number&#41;&#10;    period_seconds        &#61; optional&#40;number&#41;&#10;    timeout_seconds       &#61; optional&#40;number&#41;&#10;  &#125;&#41;&#41;&#10;  ports &#61; optional&#40;map&#40;object&#40;&#123;&#10;    container_port &#61; optional&#40;number&#41;&#10;    name           &#61; optional&#40;string&#41;&#10;  &#125;&#41;&#41;&#41;&#10;  resources &#61; optional&#40;object&#40;&#123;&#10;    limits            &#61; optional&#40;map&#40;string&#41;&#41;&#10;    cpu_idle          &#61; optional&#40;bool&#41;&#10;    startup_cpu_boost &#61; optional&#40;bool&#41;&#10;  &#125;&#41;&#41;&#10;  startup_probe &#61; optional&#40;object&#40;&#123;&#10;    grpc &#61; optional&#40;object&#40;&#123;&#10;      port    &#61; optional&#40;number&#41;&#10;      service &#61; optional&#40;string&#41;&#10;    &#125;&#41;&#41;&#10;    http_get &#61; optional&#40;object&#40;&#123;&#10;      http_headers &#61; optional&#40;map&#40;string&#41;&#41;&#10;      path         &#61; optional&#40;string&#41;&#10;      port         &#61; optional&#40;number&#41;&#10;    &#125;&#41;&#41;&#10;    tcp_socket &#61; optional&#40;object&#40;&#123;&#10;      port &#61; optional&#40;number&#41;&#10;    &#125;&#41;&#41;&#10;    failure_threshold     &#61; optional&#40;number&#41;&#10;    initial_delay_seconds &#61; optional&#40;number&#41;&#10;    period_seconds        &#61; optional&#40;number&#41;&#10;    timeout_seconds       &#61; optional&#40;number&#41;&#10;  &#125;&#41;&#41;&#10;  volume_mounts &#61; optional&#40;map&#40;string&#41;&#41;&#10;&#125;&#41;&#41;">map&#40;object&#40;&#123;&#8230;&#125;&#41;&#41;</code> |  | <code>&#123;&#125;</code> |
+| [context](variables.tf#L97) | Context-specific interpolations. | <code title="object&#40;&#123;&#10;  condition_vars &#61; optional&#40;map&#40;map&#40;string&#41;&#41;, &#123;&#125;&#41; &#35; not needed here&#63;&#10;  cidr_ranges    &#61; optional&#40;map&#40;string&#41;, &#123;&#125;&#41;&#10;  custom_roles   &#61; optional&#40;map&#40;string&#41;, &#123;&#125;&#41;&#10;  iam_principals &#61; optional&#40;map&#40;string&#41;, &#123;&#125;&#41;&#10;  kms_keys       &#61; optional&#40;map&#40;string&#41;, &#123;&#125;&#41;&#10;  locations      &#61; optional&#40;map&#40;string&#41;, &#123;&#125;&#41;&#10;  networks       &#61; optional&#40;map&#40;string&#41;, &#123;&#125;&#41;&#10;  project_ids    &#61; optional&#40;map&#40;string&#41;, &#123;&#125;&#41;&#10;  subnets        &#61; optional&#40;map&#40;string&#41;, &#123;&#125;&#41;&#10;  tag_values     &#61; optional&#40;map&#40;string&#41;, &#123;&#125;&#41;&#10;&#125;&#41;">object&#40;&#123;&#8230;&#125;&#41;</code> |  | <code>&#123;&#125;</code> |
+| [deletion_protection](variables.tf#L115) | Deletion protection setting for this Cloud Run service. | <code>string</code> |  | <code>null</code> |
+| [encryption_key](variables.tf#L121) | The full resource name of the Cloud KMS CryptoKey. | <code>string</code> |  | <code>null</code> |
+| [iam](variables.tf#L127) | IAM bindings for Cloud Run service in {ROLE => [MEMBERS]} format. | <code>map&#40;list&#40;string&#41;&#41;</code> |  | <code>&#123;&#125;</code> |
+| [job_config](variables.tf#L133) | Cloud Run Job specific configuration. | <code title="object&#40;&#123;&#10;  max_retries &#61; optional&#40;number&#41;&#10;  task_count  &#61; optional&#40;number&#41;&#10;  timeout     &#61; optional&#40;string&#41;&#10;&#125;&#41;">object&#40;&#123;&#8230;&#125;&#41;</code> |  | <code>&#123;&#125;</code> |
+| [labels](variables.tf#L148) | Resource labels. | <code>map&#40;string&#41;</code> |  | <code>&#123;&#125;</code> |
+| [launch_stage](variables.tf#L154) | The launch stage as defined by Google Cloud Platform Launch Stages. | <code>string</code> |  | <code>null</code> |
+| [managed_revision](variables.tf#L171) | Whether the Terraform module should control the deployment of revisions. | <code>bool</code> |  | <code>true</code> |
+| [revision](variables.tf#L193) | Revision template configurations. | <code title="object&#40;&#123;&#10;  gpu_zonal_redundancy_disabled &#61; optional&#40;bool&#41;&#10;  labels                        &#61; optional&#40;map&#40;string&#41;&#41;&#10;  name                          &#61; optional&#40;string&#41;&#10;  node_selector &#61; optional&#40;object&#40;&#123;&#10;    accelerator &#61; string&#10;  &#125;&#41;&#41;&#10;  vpc_access &#61; optional&#40;object&#40;&#123;&#10;    connector &#61; optional&#40;string&#41;&#10;    egress    &#61; optional&#40;string&#41;&#10;    network   &#61; optional&#40;string&#41;&#10;    subnet    &#61; optional&#40;string&#41;&#10;    tags      &#61; optional&#40;list&#40;string&#41;&#41;&#10;  &#125;&#41;, &#123;&#125;&#41;&#10;  timeout &#61; optional&#40;string&#41;&#10;  gen2_execution_environment &#61; optional&#40;any&#41; &#35; DEPRECATED&#10;  job                        &#61; optional&#40;any&#41; &#35; DEPRECATED&#10;  max_concurrency            &#61; optional&#40;any&#41; &#35; DEPRECATED&#10;  max_instance_count         &#61; optional&#40;any&#41; &#35; DEPRECATED&#10;  min_instance_count         &#61; optional&#40;any&#41; &#35; DEPRECATED&#10;&#125;&#41;">object&#40;&#123;&#8230;&#125;&#41;</code> |  | <code>&#123;&#125;</code> |
+| [service_account_config](variables-serviceaccount.tf#L17) | Service account configurations. | <code title="object&#40;&#123;&#10;  create       &#61; optional&#40;bool, true&#41;&#10;  display_name &#61; optional&#40;string&#41;&#10;  email        &#61; optional&#40;string&#41;&#10;  name         &#61; optional&#40;string&#41;&#10;  roles &#61; optional&#40;list&#40;string&#41;, &#91;&#10;    &#34;roles&#47;logging.logWriter&#34;,&#10;    &#34;roles&#47;monitoring.metricWriter&#34;&#10;  &#93;&#41;&#10;&#125;&#41;">object&#40;&#123;&#8230;&#125;&#41;</code> |  | <code>&#123;&#125;</code> |
+| [service_config](variables.tf#L260) | Cloud Run service specific configuration options. | <code title="object&#40;&#123;&#10;  custom_audiences &#61; optional&#40;list&#40;string&#41;, null&#41;&#10;  eventarc_triggers &#61; optional&#40;&#10;    object&#40;&#123;&#10;      audit_log &#61; optional&#40;map&#40;object&#40;&#123;&#10;        method  &#61; string&#10;        service &#61; string&#10;      &#125;&#41;&#41;&#41;&#10;      pubsub &#61; optional&#40;map&#40;string&#41;&#41;&#10;      storage &#61; optional&#40;map&#40;object&#40;&#123;&#10;        bucket &#61; string&#10;        path   &#61; optional&#40;string&#41;&#10;      &#125;&#41;&#41;&#41;&#10;      service_account_email &#61; optional&#40;string&#41;&#10;  &#125;&#41;, &#123;&#125;&#41;&#10;  gen2_execution_environment &#61; optional&#40;bool, false&#41;&#10;  iap_config &#61; optional&#40;object&#40;&#123;&#10;    iam          &#61; optional&#40;list&#40;string&#41;, &#91;&#93;&#41;&#10;    iam_additive &#61; optional&#40;list&#40;string&#41;, &#91;&#93;&#41;&#10;  &#125;&#41;, null&#41;&#10;  ingress              &#61; optional&#40;string, null&#41;&#10;  invoker_iam_disabled &#61; optional&#40;bool, false&#41;&#10;  max_concurrency      &#61; optional&#40;number&#41;&#10;  scaling &#61; optional&#40;object&#40;&#123;&#10;    max_instance_count &#61; optional&#40;number&#41;&#10;    min_instance_count &#61; optional&#40;number&#41;&#10;  &#125;&#41;&#41;&#10;  timeout &#61; optional&#40;string&#41;&#10;&#125;&#41;">object&#40;&#123;&#8230;&#125;&#41;</code> |  | <code>&#123;&#125;</code> |
+| [tag_bindings](variables.tf#L323) | Tag bindings for this service, in key => tag value id format. | <code>map&#40;string&#41;</code> |  | <code>&#123;&#125;</code> |
+| [type](variables.tf#L330) | Type of Cloud Run resource to deploy: JOB, SERVICE or WORKERPOOL. | <code>string</code> |  | <code>&#34;SERVICE&#34;</code> |
+| [volumes](variables.tf#L340) | Named volumes in containers in name => attributes format. | <code title="map&#40;object&#40;&#123;&#10;  secret &#61; optional&#40;object&#40;&#123;&#10;    name         &#61; string&#10;    default_mode &#61; optional&#40;string&#41;&#10;    path         &#61; optional&#40;string&#41;&#10;    version      &#61; optional&#40;string&#41;&#10;    mode         &#61; optional&#40;string&#41;&#10;  &#125;&#41;&#41;&#10;  cloud_sql_instances &#61; optional&#40;list&#40;string&#41;&#41;&#10;  empty_dir_size      &#61; optional&#40;string&#41;&#10;  gcs &#61; optional&#40;object&#40;&#123;&#10;    bucket       &#61; string&#10;    is_read_only &#61; optional&#40;bool&#41;&#10;  &#125;&#41;&#41;&#10;  nfs &#61; optional&#40;object&#40;&#123;&#10;    server       &#61; string&#10;    path         &#61; optional&#40;string&#41;&#10;    is_read_only &#61; optional&#40;bool&#41;&#10;  &#125;&#41;&#41;&#10;&#125;&#41;&#41;">map&#40;object&#40;&#123;&#8230;&#125;&#41;&#41;</code> |  | <code>&#123;&#125;</code> |
+| [vpc_connector_create](variables-vpcconnector.tf#L17) | VPC connector network configuration. Must be provided if new VPC connector is being created. | <code title="object&#40;&#123;&#10;  ip_cidr_range &#61; optional&#40;string&#41;&#10;  machine_type  &#61; optional&#40;string&#41;&#10;  name          &#61; optional&#40;string&#41;&#10;  network       &#61; optional&#40;string&#41;&#10;  instances &#61; optional&#40;object&#40;&#123;&#10;    max &#61; optional&#40;number&#41;&#10;    min &#61; optional&#40;number&#41;&#10;    &#125;&#41;, &#123;&#125;&#10;  &#41;&#10;  throughput &#61; optional&#40;object&#40;&#123;&#10;    max &#61; optional&#40;number&#41;&#10;    min &#61; optional&#40;number&#41;&#10;    &#125;&#41;, &#123;&#125;&#10;  &#41;&#10;  subnet &#61; optional&#40;object&#40;&#123;&#10;    name       &#61; optional&#40;string&#41;&#10;    project_id &#61; optional&#40;string&#41;&#10;  &#125;&#41;, &#123;&#125;&#41;&#10;&#125;&#41;">object&#40;&#123;&#8230;&#125;&#41;</code> |  | <code>null</code> |
+| [workerpool_config](variables.tf#L374) | Cloud Run Worker Pool specific configuration. | <code title="object&#40;&#123;&#10;  scaling &#61; optional&#40;object&#40;&#123;&#10;    manual_instance_count &#61; optional&#40;number&#41;&#10;    max_instance_count    &#61; optional&#40;number&#41;&#10;    min_instance_count    &#61; optional&#40;number&#41;&#10;    mode                  &#61; optional&#40;string&#41;&#10;  &#125;&#41;&#41;&#10;&#125;&#41;">object&#40;&#123;&#8230;&#125;&#41;</code> |  | <code>&#123;&#125;</code> |
 
 ## Outputs
 
@@ -842,18 +1013,21 @@ module "cloud_run" {
 |---|---|:---:|
 | [id](outputs.tf#L17) | Fully qualified job or service id. |  |
 | [invoke_command](outputs.tf#L22) | Command to invoke Cloud Run Service / submit job. |  |
-| [job](outputs.tf#L40) | Cloud Run Job. |  |
-| [service](outputs.tf#L45) | Cloud Run Service. |  |
-| [service_account](outputs.tf#L50) | Service account resource. |  |
-| [service_account_email](outputs.tf#L55) | Service account email. |  |
-| [service_account_iam_email](outputs.tf#L60) | Service account email. |  |
-| [service_name](outputs.tf#L68) | Cloud Run service name. |  |
-| [service_uri](outputs.tf#L73) | Main URI in which the service is serving traffic. |  |
-| [vpc_connector](outputs.tf#L78) | VPC connector resource if created. |  |
+| [job](outputs.tf#L27) | Cloud Run Job. |  |
+| [resource](outputs.tf#L32) | Cloud Run resource (job, service or worker_pool). |  |
+| [resource_name](outputs.tf#L37) | Cloud Run resource (job, service or workerpool)  service name. |  |
+| [service](outputs.tf#L42) | Cloud Run Service. |  |
+| [service_account](outputs.tf#L46) | Service account resource. |  |
+| [service_account_email](outputs.tf#L51) | Service account email. |  |
+| [service_account_iam_email](outputs.tf#L56) | Service account email. |  |
+| [service_name](outputs.tf#L64) | Cloud Run service name. |  |
+| [service_uri](outputs.tf#L69) | Main URI in which the service is serving traffic. |  |
+| [vpc_connector](outputs.tf#L74) | VPC connector resource if created. |  |
 
 ## Fixtures
 
 - [cloudsql-instance.tf](../../tests/fixtures/cloudsql-instance.tf)
+- [gcs.tf](../../tests/fixtures/gcs.tf)
 - [iam-service-account.tf](../../tests/fixtures/iam-service-account.tf)
 - [pubsub.tf](../../tests/fixtures/pubsub.tf)
 - [secret-credentials.tf](../../tests/fixtures/secret-credentials.tf)

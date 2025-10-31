@@ -31,6 +31,7 @@ variable "backend_service_config" {
     }))
     log_sample_rate  = optional(number)
     name             = optional(string)
+    description      = optional(string, "Terraform managed.")
     protocol         = optional(string, "UNSPECIFIED")
     session_affinity = optional(string)
     timeout_sec      = optional(number)
@@ -57,6 +58,19 @@ variable "backends" {
     failover    = optional(bool, false)
   }))
   default  = []
+  nullable = false
+}
+
+variable "context" {
+  description = "Context-specific interpolations."
+  type = object({
+    addresses   = optional(map(string), {})
+    locations   = optional(map(string), {})
+    networks    = optional(map(string), {})
+    project_ids = optional(map(string), {})
+    subnets     = optional(map(string), {})
+  })
+  default  = {}
   nullable = false
 }
 

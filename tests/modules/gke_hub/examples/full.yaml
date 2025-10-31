@@ -45,6 +45,11 @@ values:
       - enabled: false
     allow_net_admin: null
     binary_authorization: []
+    cluster_autoscaling:
+    - autoscaling_profile: BALANCED
+      default_compute_class_enabled: null
+      enabled: true
+      resource_limits: []
     control_plane_endpoints_config:
     - dns_endpoint_config:
       - allow_external_traffic: true
@@ -72,6 +77,7 @@ values:
     enable_shielded_nodes: false
     enable_tpu: false
     fleet: []
+    in_transit_encryption_config: null
     initial_node_count: 1
     location: europe-west1
     logging_config:
@@ -96,6 +102,7 @@ values:
       managed_prometheus:
       - enabled: true
     name: cluster-1
+    network_performance_config: []
     network_policy: []
     node_config:
     - advanced_machine_features: []
@@ -108,7 +115,6 @@ values:
       flex_start: null
       gvnic: []
       host_maintenance_policy: []
-      linux_node_config: []
       local_nvme_ssd_block_config: []
       local_ssd_encryption_mode: null
       max_run_duration: null
@@ -124,6 +130,14 @@ values:
       storage_pools: null
       tags: null
       taint: []
+    node_pool_auto_config:
+    - linux_node_config:
+      - {}
+      network_tags:
+      - tags: []
+      node_kubelet_config:
+      - insecure_kubelet_readonly_port_enabled: 'TRUE'
+      resource_manager_tags: null
     node_pool_defaults:
     - node_config_defaults:
       - containerd_config: []
@@ -158,6 +172,18 @@ values:
     terraform_labels:
       goog-terraform-provisioned: 'true'
     timeouts: null
+  module.hub.google_gke_hub_feature.default["policycontroller"]:
+    effective_labels:
+      goog-terraform-provisioned: 'true'
+    fleet_default_member_config: []
+    labels: null
+    location: global
+    name: policycontroller
+    project: gkehub-test
+    spec: []
+    terraform_labels:
+      goog-terraform-provisioned: 'true'
+    timeouts: null
   module.hub.google_gke_hub_feature_membership.default["cluster-1"]:
     configmanagement:
     - config_sync:
@@ -180,33 +206,46 @@ values:
       - enable_hierarchical_resource_quota: true
         enable_pod_tree_labels: true
         enabled: true
-      policy_controller:
-      - audit_interval_seconds: '120'
-        enabled: true
-        exemptable_namespaces: null
-        log_denies_enabled: true
-        mutation_enabled: null
-        referential_rules_enabled: true
-        template_library_installed: true
+      policy_controller: []
       version: v1
     feature: configmanagement
     location: global
     membership: cluster-1
-    membership_location: null
+    membership_location: europe-west1
     mesh: []
     policycontroller: []
     project: gkehub-test
     timeouts: null
+  module.hub.google_gke_hub_feature_membership.policycontroller["cluster-1"]:
+    configmanagement: []
+    feature: policycontroller
+    location: global
+    membership: cluster-1
+    membership_location: europe-west1
+    mesh: []
+    policycontroller:
+    - policy_controller_hub_config:
+      - audit_interval_seconds: 120
+        constraint_violation_limit: null
+        exemptable_namespaces:
+        - kube-system
+        - kube-public
+        install_spec: null
+        log_denies_enabled: true
+        mutation_enabled: null
+        referential_rules_enabled: true
+      version: v1.17.3
+    project: gkehub-test
+    timeouts: null
   module.hub.google_gke_hub_membership.default["cluster-1"]:
     authority: []
-    description: null
     effective_labels:
       goog-terraform-provisioned: 'true'
     endpoint:
     - gke_cluster:
       - {}
     labels: null
-    location: global
+    location: europe-west1
     membership_id: cluster-1
     project: gkehub-test
     terraform_labels:
@@ -321,6 +360,7 @@ values:
     name: network
     network_firewall_policy_enforcement_order: AFTER_CLASSIC_FIREWALL
     network_profile: null
+    params: []
     project: gkehub-test
     routing_mode: GLOBAL
     timeouts: null
@@ -333,6 +373,7 @@ values:
     next_hop_ilb: null
     next_hop_instance: null
     next_hop_vpn_tunnel: null
+    params: []
     priority: 1000
     project: gkehub-test
     tags: null
@@ -346,6 +387,7 @@ values:
     next_hop_ilb: null
     next_hop_instance: null
     next_hop_vpn_tunnel: null
+    params: []
     priority: 1000
     project: gkehub-test
     tags: null
@@ -359,6 +401,7 @@ values:
     next_hop_ilb: null
     next_hop_instance: null
     next_hop_vpn_tunnel: null
+    params: []
     priority: 1000
     project: gkehub-test
     tags: null
@@ -371,6 +414,7 @@ values:
     log_config: []
     name: cluster-1
     network: network
+    params: []
     private_ip_google_access: true
     project: gkehub-test
     region: europe-west1
@@ -384,14 +428,14 @@ counts:
   google_compute_route: 3
   google_compute_subnetwork: 1
   google_container_cluster: 1
-  google_gke_hub_feature: 1
-  google_gke_hub_feature_membership: 1
+  google_gke_hub_feature: 2
+  google_gke_hub_feature_membership: 2
   google_gke_hub_membership: 1
   google_project: 1
   google_project_iam_member: 6
   google_project_service: 7
   google_project_service_identity: 5
   modules: 4
-  resources: 28
+  resources: 30
 
 outputs: {}

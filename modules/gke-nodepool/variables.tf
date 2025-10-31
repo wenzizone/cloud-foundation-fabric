@@ -75,7 +75,7 @@ variable "network_config" {
       network    = string
       subnetwork = string
     })), [])
-    additional_pod_network_config = optional(list(object({
+    additional_pod_network_configs = optional(list(object({
       subnetwork          = string
       secondary_pod_range = string
       max_pods_per_node   = string
@@ -107,10 +107,18 @@ variable "node_config" {
     gvnic                = optional(bool, false)
     image_type           = optional(string)
     kubelet_config = optional(object({
-      cpu_manager_policy   = string
-      cpu_cfs_quota        = optional(bool)
-      cpu_cfs_quota_period = optional(string)
-      pod_pids_limit       = optional(number)
+      cpu_manager_policy                     = string
+      cpu_cfs_quota                          = optional(bool)
+      cpu_cfs_quota_period                   = optional(string)
+      insecure_kubelet_readonly_port_enabled = optional(string)
+      pod_pids_limit                         = optional(number)
+      container_log_max_size                 = optional(string)
+      container_log_max_files                = optional(number)
+      image_gc_low_threshold_percent         = optional(number)
+      image_gc_high_threshold_percent        = optional(number)
+      image_minimum_gc_age                   = optional(string)
+      image_maximum_gc_age                   = optional(string)
+      allowed_unsafe_sysctls                 = optional(list(string), [])
     }))
     linux_node_config = optional(object({
       sysctls     = optional(map(string))
@@ -218,6 +226,12 @@ variable "reservation_affinity" {
     values                   = optional(list(string))
   })
   default = null
+}
+
+variable "resource_manager_tags" {
+  description = "A map of resource manager tag keys and values to be attached to the nodes for managing Compute Engine firewalls using Network Firewall Policies."
+  type        = map(string)
+  default     = null
 }
 
 variable "service_account" {

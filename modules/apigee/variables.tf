@@ -26,6 +26,18 @@ variable "addons_config" {
   default = null
 }
 
+variable "dns_zones" {
+  description = "DNS zones."
+  type = map(object({
+    domain            = string
+    description       = string
+    target_project_id = string
+    target_network_id = string
+  }))
+  default  = {}
+  nullable = false
+}
+
 variable "endpoint_attachments" {
   description = "Endpoint attachments."
   type = map(object({
@@ -84,6 +96,10 @@ variable "instances" {
     name                          = optional(string)
     runtime_ip_cidr_range         = optional(string)
     troubleshooting_ip_cidr_range = optional(string)
+    access_logging = optional(object({
+      enabled = optional(bool, true)
+      filter  = optional(string)
+    }))
   }))
   validation {
     condition = alltrue([

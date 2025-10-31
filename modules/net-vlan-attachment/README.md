@@ -102,7 +102,7 @@ module "example-va" {
 # tftest modules=1 resources=5
 ```
 
-If you don't specify the MD5 key, the module will generate a random 12 charachters key for you.
+If you don't specify the MD5 key, the module will generate a random 12 characters key for you.
 
 ```hcl
 resource "google_compute_router" "interconnect-router" {
@@ -543,8 +543,6 @@ module "example-va-b-ew12" {
 ```
 
 ### IPSec for Dedicated Interconnect
-
-Refer to the [HA VPN over Interconnect Blueprint](../../blueprints/networking/ha-vpn-over-interconnect/) for an all-encompassing example.
 
 ```hcl
 resource "google_compute_router" "encrypted-interconnect-underlay-router-ew8" {

@@ -16,7 +16,15 @@
 
 locals {
   # descriptive_name cannot contain colons, so we omit the universe from the default
-  _observability_factory_path = pathexpand(coalesce(var.factories_config.observability, "-"))
+  _observability_factory_path = pathexpand(coalesce(
+    var.factories_config.observability, "-"
+  ))
+  ctx = {
+    for k, v in var.context : k => {
+      for kk, vv in v : "${local.ctx_p}${k}:${kk}" => vv
+    } if k != "condition_vars"
+  }
+  ctx_p = "$"
   descriptive_name = (
     var.descriptive_name != null ? var.descriptive_name : "${local.prefix}${var.name}"
   )
@@ -24,9 +32,21 @@ locals {
     for f in try(fileset(local._observability_factory_path, "*.yaml"), []) :
     yamldecode(file("${local._observability_factory_path}/${f}"))
   ]
-  parent_type = var.parent == null ? null : split("/", var.parent)[0]
-  parent_id   = var.parent == null ? null : split("/", var.parent)[1]
-  prefix      = var.prefix == null ? "" : "${var.prefix}-"
+  parent_type = (
+    var.parent == null
+    ? null
+    : (
+      startswith(var.parent, "organizations")
+      ? "organizations"
+      : "folders"
+    )
+  )
+  parent_id = (
+    var.parent == null || startswith(coalesce(var.parent, "-"), "$")
+    ? var.parent
+    : split("/", var.parent)[1]
+  )
+  prefix = var.prefix == null ? "" : "${var.prefix}-"
   project = (
     var.project_reuse == null
     ? {
@@ -38,8 +58,8 @@ locals {
       try(var.project_reuse.use_data_source, null) == false
       ? {
         project_id = local.project_id
-        number     = try(var.project_reuse.project_attributes.number, null)
-        name       = try(var.project_reuse.project_attributes.name, null)
+        number     = try(var.project_reuse.attributes.number, null)
+        name       = try(var.project_reuse.attributes.name, null)
       }
       : {
         project_id = local.project_id
@@ -48,9 +68,17 @@ locals {
       }
     )
   )
-  project_id         = "${local.universe_prefix}${local.prefix}${var.name}"
-  universe_prefix    = var.universe == null ? "" : "${var.universe.prefix}:"
-  available_services = tolist(setsubtract(var.services, try(var.universe.unavailable_services, [])))
+  project_id = (
+    strcontains("${local.prefix}${var.name}", ":")
+    ? "${local.prefix}${var.name}"
+    : "${local.universe_prefix}${local.prefix}${var.name}"
+  )
+  universe_prefix = var.universe == null ? "" : "${var.universe.prefix}:"
+  # available services are those declared, minus any unsupported by universe
+  available_services = tolist(setsubtract(
+    var.services,
+    try(var.universe.unavailable_services, [])
+  ))
 }
 
 data "google_project" "project" {
@@ -59,9 +87,13 @@ data "google_project" "project" {
 }
 
 resource "google_project" "project" {
-  count               = var.project_reuse == null ? 1 : 0
-  org_id              = local.parent_type == "organizations" ? local.parent_id : null
-  folder_id           = local.parent_type == "folders" ? local.parent_id : null
+  count  = var.project_reuse == null ? 1 : 0
+  org_id = local.parent_type == "organizations" ? local.parent_id : null
+  folder_id = (
+    local.parent_type == "folders"
+    ? lookup(local.ctx.folder_ids, local.parent_id, local.parent_id)
+    : null
+  )
   project_id          = local.project_id
   name                = local.descriptive_name
   billing_account     = var.billing_account
@@ -123,4 +155,10 @@ resource "google_monitoring_monitored_project" "primary" {
   for_each      = toset(var.metric_scopes)
   metrics_scope = each.value
   name          = local.project.project_id
+}
+
+resource "google_compute_project_default_network_tier" "default_network_tier" {
+  count        = var.default_network_tier == null ? 0 : 1
+  network_tier = var.default_network_tier
+  project      = local.project.project_id
 }

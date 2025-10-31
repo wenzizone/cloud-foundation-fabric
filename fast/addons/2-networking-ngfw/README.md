@@ -30,27 +30,83 @@ The controlling project is usually one of those already created and managed by t
 
 ## How to run this stage
 
-Once the main networking stage has been configured and applied, the following configuration is added the the resource management `fast_addon` variable to create the add-on provider files, and its optional CI/CD resources if those are also required. The add-on name (`networking-ngfw`) is customizable, in case the add-on needs to be run multiple times for example to create different sets of endpoints and NGFW configurations per environment.
+Once the main networking stage has been configured and applied, the following configuration is added to the org setup stage.
 
-```hcl
-fast_addon = {
-  networking-ngfw = {
-    parent_stage = "2-networking"
-    # cicd_config = {
-    #   identity_provider = "github-test"
-    #   repository = {
-    #     name   = "test/ngfw"
-    #     type   = "github"
-    #     branch = "main"
-    #   }
-    # }
-  }
-}
+First, the new provider file is declared in the `defaults.yaml` file.
+
+```yaml
+# defaults.yaml (snippet)
+
+output_files:
+  # ...
+  providers:
+    # ...
+    2-networking-ngfw:
+      bucket: $storage_buckets:iac-0/iac-stage-state
+      prefix: 2-networking-ngfw
+      service_account: $iam_principals:service_accounts/iac-0/iac-networking-rw
+
+```
+
+Then, the GCS folder (shown here) or bucket for the Terraform state is defined in the IaC project.
+
+```yaml
+# projects/iac-0.yaml
+buckets:
+  # ...
+  iac-stage-state:
+    description: Terraform state for stage automation.
+    managed_folders:
+      # ...
+      2-networking-ngfw:
+        iam:
+          roles/storage.admin:
+            - $iam_principals:service_accounts/iac-0/iac-networking-rw
+          $custom_roles:storage_viewer:
+            - $iam_principals:service_accounts/iac-0/iac-networking-ro
+
+```
+
+And finally, grant extra roles at the organization level to the networking service accounts.
+
+```yaml
+# organization/.config.yaml
+iam_by_principals:
+  # ...
+  $iam_principals:service_accounts/iac-0/iac-networking-rw:
+    - roles/compute.orgFirewallPolicyAdmin
+    - roles/compute.xpnAdmin
+    # add the custom role
+    - $custom_roles:ngfw_enterprise_admin
+  $iam_principals:service_accounts/iac-0/iac-networking-ro:
+    - roles/compute.orgFirewallPolicyUser
+    - roles/compute.viewer
+    # add the custom role
+    - $custom_roles:ngfw_enterprise_viewer
+```
+
+If VPC-SC is used, an additional ingress policy needs to be added to the perimeter to allow the NGFW service agent to reach the Certificate Authority Service. Edit and enable the following policy.
+
+```yaml
+from:
+  access_levels:
+    - "*"
+  identities:
+    # TODO: change to actual NGFW service identity
+    - serviceAccount:service-1234567890@gcp-sa-networksecurity.iam.gserviceaccount.com
+to:
+  operations:
+    - method_selectors:
+        - "*"
+      service_name: privateca.googleapis.com
+  resources:
+    # TODO: change to project number where CAS lives
+    - projects/1234567890
 ```
 
 ### Provider and Terraform variables
 
-As all other FAST stages, the [mechanism used to pass variable values and pre-built provider files from one stage to the next](../../stages/0-bootstrap/README.md#output-files-and-cross-stage-variables) is also leveraged here.
+As all other FAST stages, the [mechanism used to pass variable values and pre-built provider files from one stage to the next](../../stages/0-org-setup/README.md#output-files-and-cross-stage-variables) is also leveraged here.
 
 The commands to link or copy the provider and terraform variable files can be easily derived from the `fast-links.sh` script in the FAST stages folder, passing it a single argument with the local output files folder (if configured) or the GCS output bucket in the automation project (derived from stage 0 outputs). The following example uses local files but GCS behaves identically.
 
@@ -63,8 +119,7 @@ ln -s ~/fast-config/providers/2-networking-ngfw-providers.tf ./
 
 # input files from other stages
 ln -s ~/fast-config/tfvars/0-globals.auto.tfvars.json ./
-ln -s ~/fast-config/tfvars/0-bootstrap.auto.tfvars.json ./
-ln -s ~/fast-config/tfvars/1-resman.auto.tfvars.json ./
+ln -s ~/fast-config/tfvars/0-org-setup.auto.tfvars.json ./
 ln -s ~/fast-config/tfvars/2-networking.auto.tfvars.json ./
 
 # conventional place for stage tfvars (manually created)
@@ -83,12 +138,12 @@ The preconfigured provider file uses impersonation to run with this stage's auto
 Variables in this stage -- like most other FAST stages -- are broadly divided into three separate sets:
 
 - variables which refer to global values for the whole organization (org id, billing account id, prefix, etc.), which are pre-populated via the `0-globals.auto.tfvars.json` file linked or copied above
-- variables which refer to resources managed by previous stages, which are prepopulated here via the `0-bootstrap.auto.tfvars.json`, `1-resman.auto.tfvars.json` and `2-networking.auto.tfvars.json` files linked or copied above
+- variables which refer to resources managed by previous stages, which are prepopulated here via the `0-org-setup.auto.tfvars.json`, `1-resman.auto.tfvars.json` and `2-networking.auto.tfvars.json` files linked or copied above
 - and finally variables that optionally control this stage's behaviour and customizations, and can to be set in a custom `terraform.tfvars` file
 
 The first two sets are defined in the `variables-fast.tf` file, the latter set in the `variables.tf` file. The full list of variables can be found in the [Variables](#variables) table at the bottom of this document.
 
-Note that the `outputs_location` variable is disabled by default, you need to explicitly set it in your `terraform.tfvars` file if you want output files to be generated by this stage. This is a sample `terraform.tfvars` that configures it, refer to the [bootstrap stage documentation](../../stages/0-bootstrap/README.md#output-files-and-cross-stage-variables) for more details:
+Note that the `outputs_location` variable is disabled by default, you need to explicitly set it in your `terraform.tfvars` file if you want output files to be generated by this stage. This is a sample `terraform.tfvars` that configures it, refer to the [bootstrap stage documentation](../../stages/0-org-setup/README.md#output-files-and-cross-stage-variables) for more details:
 
 ```tfvars
 outputs_location = "~/fast-config"

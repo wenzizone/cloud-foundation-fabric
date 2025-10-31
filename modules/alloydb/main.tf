@@ -1,5 +1,5 @@
 /**
- * Copyright 2024 Google LLC
+ * Copyright 2025 Google LLC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -61,6 +61,7 @@ resource "google_alloydb_cluster" "primary" {
   cluster_type                     = var.cross_region_replication.switchover_mode ? "SECONDARY" : "PRIMARY"
   database_version                 = var.database_version
   deletion_policy                  = var.deletion_policy
+  deletion_protection              = var.deletion_protection
   display_name                     = coalesce(var.cluster_display_name, local.primary_cluster_name)
   labels                           = var.labels
   location                         = var.location
@@ -182,6 +183,7 @@ resource "google_alloydb_cluster" "primary" {
 }
 
 resource "google_alloydb_instance" "primary" {
+  provider          = google-beta
   annotations       = var.annotations
   availability_type = var.availability_type
   cluster           = google_alloydb_cluster.primary.id
@@ -252,6 +254,7 @@ resource "google_alloydb_cluster" "secondary" {
   cluster_type                     = var.cross_region_replication.promote_secondary || var.cross_region_replication.switchover_mode ? "PRIMARY" : "SECONDARY"
   database_version                 = var.database_version
   deletion_policy                  = "FORCE"
+  deletion_protection              = var.deletion_protection
   display_name                     = coalesce(var.cross_region_replication.secondary_cluster_display_name, local.secondary_cluster_name)
   labels                           = var.labels
   location                         = var.cross_region_replication.region
@@ -367,6 +370,7 @@ resource "google_alloydb_cluster" "secondary" {
 }
 
 resource "google_alloydb_instance" "secondary" {
+  provider          = google-beta
   count             = var.cross_region_replication.enabled ? 1 : 0
   annotations       = var.annotations
   availability_type = var.availability_type
@@ -436,6 +440,7 @@ resource "google_alloydb_instance" "secondary" {
 # * gce_zone
 # * network_config.enable_outbound_public_ip
 resource "google_alloydb_instance" "read_pool" {
+  provider       = google-beta
   for_each       = local.read_pool
   annotations    = var.annotations
   cluster        = google_alloydb_cluster.primary.id

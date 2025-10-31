@@ -80,6 +80,20 @@ variable "access_policy_create" {
   default = null
 }
 
+variable "context" {
+  description = "External context used in replacements."
+  type = object({
+    condition_vars  = optional(map(map(string)), {})
+    iam_principals  = optional(map(string), {})
+    identity_sets   = optional(map(list(string)), {})
+    project_numbers = optional(map(number), {})
+    resource_sets   = optional(map(list(string)), {})
+    service_sets    = optional(map(list(string)), {})
+  })
+  default  = {}
+  nullable = false
+}
+
 variable "egress_policies" {
   description = "Egress policy definitions that can be referenced in perimeters."
   type = map(object({
@@ -130,11 +144,6 @@ variable "factories_config" {
     egress_policies  = optional(string)
     ingress_policies = optional(string)
     perimeters       = optional(string)
-    context = optional(object({
-      resource_sets = optional(map(list(string)), {})
-      service_sets  = optional(map(list(string)), {})
-      identity_sets = optional(map(list(string)), {})
-    }), {})
   })
   nullable = false
   default  = {}
@@ -226,22 +235,22 @@ variable "perimeters" {
     title                     = optional(string)
     use_explicit_dry_run_spec = optional(bool, false)
     spec = optional(object({
-      access_levels       = optional(list(string))
-      egress_policies     = optional(list(string))
-      ingress_policies    = optional(list(string))
-      restricted_services = optional(list(string))
-      resources           = optional(list(string))
+      access_levels       = optional(list(string), [])
+      egress_policies     = optional(list(string), [])
+      ingress_policies    = optional(list(string), [])
+      restricted_services = optional(list(string), [])
+      resources           = optional(list(string), [])
       vpc_accessible_services = optional(object({
         allowed_services   = list(string)
         enable_restriction = optional(bool, true)
       }))
     }))
     status = optional(object({
-      access_levels       = optional(list(string))
-      egress_policies     = optional(list(string))
-      ingress_policies    = optional(list(string))
-      resources           = optional(list(string))
-      restricted_services = optional(list(string))
+      access_levels       = optional(list(string), [])
+      egress_policies     = optional(list(string), [])
+      ingress_policies    = optional(list(string), [])
+      resources           = optional(list(string), [])
+      restricted_services = optional(list(string), [])
       vpc_accessible_services = optional(object({
         allowed_services   = list(string)
         enable_restriction = optional(bool, true)

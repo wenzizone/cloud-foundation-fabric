@@ -1,5 +1,5 @@
 /**
- * Copyright 2024 Google LLC
+ * Copyright 2025 Google LLC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,12 +21,7 @@ output "custom_constraint_ids" {
 
 output "custom_role_id" {
   description = "Map of custom role IDs created in the organization."
-  value = {
-    for k, v in google_organization_iam_custom_role.roles :
-    # build the string manually so that role IDs can be used as map
-    # keys (useful for folder/organization/project-level iam bindings)
-    (k) => "${var.organization_id}/roles/${local.custom_roles[k].name}"
-  }
+  value       = local.custom_role_ids
 }
 
 output "custom_roles" {
@@ -65,7 +60,7 @@ output "network_tag_values" {
   description = "Tag value resources."
   value = {
     for k, v in google_tags_tag_value.default :
-    k => v if local.tag_values[k].tag_network
+    k => v if local.tag_values[k].tag_network != null
   }
 }
 
@@ -86,6 +81,21 @@ output "organization_id" {
     google_tags_tag_value.default,
     google_tags_tag_value_iam_binding.default,
   ]
+}
+
+output "organization_policies_ids" {
+  description = "Map of ORGANIZATION_POLICIES => ID in the organization."
+  value       = { for k, v in google_org_policy_policy.default : k => v.id }
+}
+
+output "scc_custom_sha_modules_ids" {
+  description = "Map of SCC CUSTOM SHA MODULES => ID in the organization."
+  value       = { for k, v in google_scc_management_organization_security_health_analytics_custom_module.scc_organization_custom_module : k => v.id }
+}
+
+output "service_agents" {
+  description = "Identities of all organization-level service agents."
+  value       = local.service_agents
 }
 
 output "sink_writer_identities" {
@@ -109,6 +119,7 @@ output "tag_values" {
   description = "Tag value resources."
   value = {
     for k, v in google_tags_tag_value.default :
-    k => v if !local.tag_values[k].tag_network
+    k => v if local.tag_values[k].tag_network == null
   }
 }
+

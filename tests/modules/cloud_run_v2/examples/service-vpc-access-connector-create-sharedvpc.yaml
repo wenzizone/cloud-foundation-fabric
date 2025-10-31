@@ -1,4 +1,4 @@
-# Copyright 2024 Google LLC
+# Copyright 2025 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
 values:
   module.cloud_run.google_cloud_run_v2_service.service[0]:
     location: europe-west8
-    name: hello
+    name: example-hello
     project: test-service
     template:
       - containers:
@@ -33,17 +33,25 @@ values:
     machine_type: e2-standard-4
     max_throughput: 300
     min_throughput: 200
-    name: hello
+    name: example-hello
     project: test-service
     region: europe-west8
     subnet:
       - name: fixture-subnet-28
         project_id: test-host
+  # those IAM grants from shared-vpc.tf fixture are necessary for successful connector deployment
+  module.project-service.google_project_iam_member.shared_vpc_host_robots["roles/compute.networkUser:cloudservices"]:
+    condition: []
+    project: test-host
+    role: roles/compute.networkUser
+  module.project-service.google_project_iam_member.shared_vpc_host_robots["roles/compute.networkUser:vpcaccess"]:
+    condition: []
+    project: test-host
+    role: roles/compute.networkUser
 
 counts:
   google_cloud_run_v2_service: 1
   google_vpc_access_connector: 1
-  modules: 4
-  resources: 59
+
 
 outputs: {}
